@@ -85,8 +85,8 @@ int main()
   // create pipeline for triangle. Here we can configure gpu pipeline for rendering
   auto && trianglePipeline = ctx->CreatePipeline(defaultFramebuffer, 0 /*index of subpass*/);
   // set shaders
-  trianglePipeline->AttachShader(RHI::ShaderType::Vertex, L"Shaders/uniform_vert.spv");
-  trianglePipeline->AttachShader(RHI::ShaderType::Fragment, L"Shaders/uniform_frag.spv");
+  trianglePipeline->AttachShader(RHI::ShaderType::Vertex, L"Shaders/uniform.vert");
+  trianglePipeline->AttachShader(RHI::ShaderType::Fragment, L"Shaders/uniform.frag");
   // set vertex attributes (5 float attributes per vertex - pos.xy and color.rgb)
   trianglePipeline->AddInputBinding(0, 5 * sizeof(float), RHI::InputBindingType::VertexData);
   trianglePipeline->AddInputAttribute(0, 0, 0, 2, RHI::InputAttributeElementType::FLOAT);

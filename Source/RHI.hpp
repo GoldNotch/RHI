@@ -1,5 +1,7 @@
 #pragma once
 #include <array>
+#include <cassert>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
@@ -302,6 +304,35 @@ struct IContext
 /// @brief Factory-function to create context
 std::unique_ptr<IContext> CreateContext(const SurfaceConfig & config,
                                         LoggingFunc loggingFunc = nullptr);
+
+
+/// @brief changes shader filename path for current API and extension format
+/// @param path - shader filename path in GLSL format
+/// @param extension - extension that should have result file
+/// @return new shader filename adapted for current file format
+inline std::filesystem::path ResolveShaderExtension(const std::filesystem::path & path,
+                                                    const std::filesystem::path & apiFolder,
+                                                    const std::filesystem::path & extension)
+{
+  std::filesystem::path suffix;
+  auto && ext = path.extension();
+  if (ext == ".vert")
+    suffix = "_vert";
+  else if (ext == ".frag")
+    suffix = "_frag";
+  else if (ext == ".geom")
+    suffix = "_geom";
+  else if (ext == ".glsl")
+  {
+    suffix = "";
+  }
+  else
+    assert(false && "Invalid format for shader file");
+  std::filesystem::path result = apiFolder / path.parent_path() / path.stem();
+  result += suffix;
+  result += extension;
+  return result;
+}
 
 } // namespace RHI
 

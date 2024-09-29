@@ -9,3 +9,9 @@ PRIVATE
 	RHI
 	glfw
 )
+
+TARGET_PRECOMPILE_SHADERS(TARGET ${PROJECT_NAME} API Vulkan
+SHADERS
+	"triangle.frag"
+	"triangle.vert"
+)
