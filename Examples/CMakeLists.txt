@@ -8,4 +8,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw3)
 
+
+add_custom_target("ExampleShaders" )
+
 add_subdirectory(HelloTriangle)

@@ -30,7 +30,7 @@
 *.exe
 *.out
 *.app
-
+*.spv # SpirV files
 
 
 build/*

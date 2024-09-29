@@ -21,7 +21,7 @@ PRIVATE
 )
 
 #---------------- Link third-party libraries ---------------
-find_package(Vulkan REQUIRED FATAL_ERROR)
+find_package(Vulkan REQUIRED)
 
 message(STATUS "Fetch vkBootstrap")
 FetchContent_Declare(
