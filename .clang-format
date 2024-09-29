@@ -1,0 +1,236 @@
+﻿---
+# clang-format 18
+BasedOnStyle: LLVM
+Language: Cpp
+
+TabWidth: 2
+UseTab: Never
+LineEnding: DeriveCRLF
+
+AccessModifierOffset: -2
+AlignAfterOpenBracket: Align
+AlignConsecutiveMacros: Consecutive
+AlignConsecutiveAssignments: None
+AlignConsecutiveDeclarations: None
+AlignEscapedNewlines: Right
+AlignOperands: AlignAfterOperator
+
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 0
+
+AllowAllArgumentsOnNextLine: false
+AllowAllConstructorInitializersOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortLambdasOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+AlwaysBreakTemplateDeclarations: Yes
+BinPackArguments: true
+BinPackParameters: true
+BitFieldColonSpacing: Both
+BraceWrapping:
+  AfterCaseLabel:  true
+  AfterClass:      true
+  AfterControlStatement: Always
+  AfterEnum:       true
+
+  # TODO: this breaks concept formatting
+  # https://reviews.llvm.org/D79773
+  AfterFunction:   true
+
+  AfterNamespace:  true
+  AfterStruct:     true
+  AfterUnion:      true
+  AfterExternBlock: true
+  BeforeCatch:     true
+  BeforeElse:      true
+  BeforeLambdaBody: true
+  IndentBraces:    false
+  SplitEmptyFunction: true
+  SplitEmptyRecord: true
+  SplitEmptyNamespace: true
+BreakBeforeBinaryOperators: None 
+BreakBeforeBraces: Custom
+BreakBeforeInheritanceComma: false
+BreakInheritanceList: AfterComma
+BreakBeforeTernaryOperators: true
+BreakConstructorInitializersBeforeComma: false
+BreakConstructorInitializers: BeforeComma
+BreakStringLiterals: false
+ColumnLimit: 100
+#CommentPragmas:  '^ IWYU pragma:'
+CompactNamespaces: false
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+ConstructorInitializerIndentWidth: 2
+ContinuationIndentWidth: 2
+Cpp11BracedListStyle: true
+DerivePointerAlignment: false
+DisableFormat:   false
+ExperimentalAutoDetectBinPacking: false
+FixNamespaceComments: true
+IndentCaseLabels: true
+IndentPPDirectives: None
+IndentWidth: 2
+IndentWrappedFunctionNames: false
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 2
+NamespaceIndentation: None
+PenaltyBreakAssignment: 10
+PenaltyBreakBeforeFirstCallParameter: 1000
+PenaltyBreakComment: 300
+PenaltyBreakFirstLessLess: 120
+PenaltyBreakString: 1000
+PenaltyBreakTemplateDeclaration: 0
+PenaltyExcessCharacter: 1000
+PenaltyReturnTypeOnItsOwnLine: 1000
+PointerAlignment: Middle
+ReflowComments: false
+SortUsingDeclarations: false
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: false
+SpaceAfterTemplateKeyword: false
+SpaceAroundPointerQualifiers: Default
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+SpaceInEmptyParentheses: false
+SpacesBeforeTrailingComments: 1
+SpacesInAngles:  false
+SpacesInContainerLiterals: false
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+StatementAttributeLikeMacros: []
+
+InsertNewlineAtEOF: true
+# RemoveSemicolon: true
+
+# Concept C++20
+IndentRequires: false
+IndentRequiresClause: true
+BreakBeforeConceptDeclarations: Always
+RequiresClausePosition: OwnLine
+RequiresExpressionIndentation: OuterScope
+
+# SeparateDefinitionBlocks: Always
+
+# IntegerLiteralSeparator:
+#   Binary: 0
+#   Decimal: 3
+#   Hex: -1
+
+SortIncludes: CaseInsensitive
+# SortIncludes: false
+IncludeIsMainSourceRegex: '.CPP'
+IncludeBlocks: Regroup
+
+# -------------------------- include sorting --------------------------
+
+# SomeClass.cpp
+
+# same-name header, if exists
+#include "SomeClass.h"
+
+# resources (probably don't need)
+#include <00900_Obj2D/00900_obj2D_def.h>
+#include <00900_Obj2D/00900_obj2D_rc2.h>
+
+# standard library
+#include <iostream>
+
+# Third party library
+#include <boost/optional/optional.hpp>
+#include <boost/property_tree/ini_parser.hpp>
+#include <boost/property_tree/ptree_fwd.hpp>
+
+# afx
+#include <afxole.h>
+#include <afxwin.h>
+
+# afx impl
+#include <../atlmfc/src/mfc/afximpl.h>
+
+# winapi
+#include <Windows.h>
+
+# rest includes in <>
+#include <Dir/OtherClass.h>
+
+# rest includes in ""
+#include "DocumentEventsHandler.h"
+#include "DocumentUIData.h"
+#include "IFrame.h"
+#include "ItDocManager.h"
+#include "ItDocTemplate.h"
+#include "ItView.h"
+#include "OleSupport.h"
+
+IncludeCategories:
+# Windows headers
+  - Regex:           'UrlHist.h'
+    Priority:        49
+  - Regex:           '<(Windows.h|gl.h|WinUser.h|windef.h|wtypes.h|wchar.h|cderr.h|gdiplus.h|io.h|comutil.h|commctrl.h|comdef.h|Ole2.h|initguid.h|ShlGuid.h)>'
+    Priority:        53
+  - Regex:           '<X11/'
+    Priority:        58
+# Resources, project export macro
+  - Regex:           '_defs?.h|_RC_bas.h|_rc2.h'
+    Priority:        5
+
+# Open gl headers order matters
+  - Regex:           '<GL/'
+    Priority:        57
+# Afx impl
+  - Regex:           'src\/mfc\/'
+    Priority:        52
+# Afx
+  - Regex:           'afx|atl'
+    Priority:        50
+
+# C++ std lib
+  - Regex:           '<([A-Za-z0-9\Q/-_\E])+>'
+    Priority:        10
+# C std lib
+  - Regex:           '<(assert.h|complex.h|ctype.h|errno.h|fenv.h|float.h|inttypes.h|iso646.h|limits.h|locale.h|math.h|setjmp.h|signal.h|stdalign.h|stdarg.h|stdatomic.h|stdbool.h|stddef.h|stdint.h|stdio.h|stdlib.h|stdnoreturn.h|string.h|tgmath.h|threads.h|time.h|uchar.h|wchar.h|wctype.h)>'
+    CaseSensitive:   true
+    Priority:        20
+
+# third party libs
+  - Regex:           '<(boost|gtest|gmock|rapidjson|SQLite|Freetype)\/'
+    CaseSensitive:   true
+    Priority:        30
+# Skia
+  - Regex:           '<Sk'
+    CaseSensitive:   true
+    Priority:        32
+# Qt
+  - Regex:           '<Q'
+    CaseSensitive:   true
+    Priority:        31
+  
+# Headers in <> with extension.
+  - Regex:           '<([A-Za-z0-9.\Q/-_\E])+>'
+    Priority:        200
+# Headers in "" with extension.
+  - Regex:           '"([A-Za-z0-9.\Q/-_\E])+"'
+    Priority:        500
+
+#StatementMacros:
+#  - Q_UNUSED
+
+WhitespaceSensitiveMacros: []
+
+# Macros not in this list are will be interpreted like function call and can be moved on next line
+TypenameMacros: 
+
+# Export macros
+  - API

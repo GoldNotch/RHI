@@ -1,0 +1,75 @@
+---
+# Configure clang-tidy for this project.
+# https://clang.llvm.org/extra/clang-tidy/checks/readability-identifier-naming.html
+
+Checks: >
+  -*,
+  readability-identifier-naming,
+
+# bugprone-*,
+# google-*,
+# misc-*,
+# modernize-*,
+# performance-*,
+# portability-*,
+# -google-readability-braces-around-statements,
+# -google-readability-namespace-comments,
+# -google-runtime-references,
+# -misc-non-private-member-variables-in-classes,
+# -modernize-return-braced-init-list,
+# -modernize-use-trailing-return-type,
+# -modernize-avoid-c-arrays,
+# -performance-move-const-arg,
+# -readability-braces-around-statements,
+# -readability-magic-numbers,
+# -readability-named-parameter,
+# -readability-redundant-declaration,
+# -readability-function-cognitive-complexity,
+# -bugprone-narrowing-conversions
+
+# Turn all the warnings from the checks above into errors.
+#WarningsAsErrors: "*"
+
+# Исключения
+HeaderFilterRegex: ".*Source[\\w]+(?!.*(UI|Tools|c3d|external)).*"
+
+CheckOptions:
+  - { key: readability-identifier-naming.ClassCase,                value: CamelCase }
+  - { key: readability-identifier-naming.ClassMemberPrefix,        value: m_        }
+  - { key: readability-identifier-naming.PrivateMemberPrefix,      value: m_        }
+  - { key: readability-identifier-naming.ProtectedMemberPrefix,    value: m_        }
+
+  - { key: readability-identifier-naming.ConstantMemberPrefix,     value: ''        }
+  - { key: readability-identifier-naming.ClassConstantPrefix,      value: m_        }
+
+  - { key: readability-identifier-naming.VariableCase,             value: camelBack }
+  - { key: readability-identifier-naming.ParameterCase,            value: camelBack }
+  - { key: readability-identifier-naming.ConstantMemberCase,       value: camelBack }
+  - { key: readability-identifier-naming.ConstexprVariableCase,    value: camelBack }
+  - { key: readability-identifier-naming.GlobalConstantCase,       value: camelBack }
+  - { key: readability-identifier-naming.MemberConstantCase,       value: camelBack }
+  - { key: readability-identifier-naming.StaticConstantCase,       value: camelBack }
+
+  - { key: readability-identifier-naming.TypeAliasCase,            value: CamelCase }
+  - { key: readability-identifier-naming.TypedefCase,              value: CamelCase }
+
+# TODO
+  - { key: readability-identifier-naming.TypeAliasIgnoredRegexp,   value: 'type' }
+  - { key: readability-identifier-naming.TypedefIgnoredRegexp,     value: 'type' }
+
+  - { key: readability-identifier-naming.FunctionCase,             value: CamelCase }
+# TODO ignore common stl and API specific functions (ks.*)
+  - { key: readability-identifier-naming.FunctionIgnoredRegexp,    value: "(hash)|(data|begin|end|size|empty|range_begin|range_end|assign|insert|cbegin|cend|clear)|(^ks.*)" }
+
+  - { key: readability-identifier-naming.EnumCase,                 value: CamelCase }
+  - { key: readability-identifier-naming.EnumConstantCase,         value: aNy_CasE  }
+  - { key: readability-identifier-naming.ScopedEnumConstantCase,   value: camelBack }
+  - { key: readability-identifier-naming.TemplateParameterCase,    value: CamelCase }
+
+  - { key: readability-identifier-naming.NamespaceCase,            value: lower_case }
+  
+  - { key: readability-identifier-naming.MacroDefinitionCase,           value: UPPER_CASE }
+  - { key: readability-identifier-naming.MacroDefinitionIgnoredRegexp,  value: "^_([0-9]+.*)|(CLASS|FUNC).*$|(^__.+)" }
+
+  - { key: readability-identifier-naming.GetConfigPerFile,         value: true }
+
