@@ -234,7 +234,7 @@ void Context::Log(LogMessageStatus status, const std::string & message) const no
 namespace RHI
 {
 std::unique_ptr<IContext> CreateContext(const SurfaceConfig & config,
-                                        LoggingFunc loggingFunc/* = nullptr*/)
+                                        LoggingFunc loggingFunc /* = nullptr*/)
 {
   return std::make_unique<vulkan::Context>(config, loggingFunc);
 }

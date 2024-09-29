@@ -11,6 +11,8 @@
 
 namespace RHI::vulkan
 {
+constexpr const char * apiFolder = ".vulkan";
+constexpr const char * shaderExtension = ".spv";
 
 namespace details
 {
