@@ -39,7 +39,7 @@ std::vector<uint32_t> ReadSPIRV(const std::filesystem::path & path)
 /// @return compiled shader module
 vk::ShaderModule BuildShaderModule(const vk::Device & device, const std::filesystem::path & path)
 {
-  auto code = ReadSPIRV(RHI::ResolveShaderExtension(path, apiFolder, shaderExtension));
+  auto code = ReadSPIRV(RHI::details::ResolveShaderExtension(path, apiFolder, shaderExtension));
   VkShaderModuleCreateInfo createInfo{};
   createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
   createInfo.codeSize = code.size() * sizeof(uint32_t);

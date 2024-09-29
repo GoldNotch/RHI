@@ -306,6 +306,9 @@ std::unique_ptr<IContext> CreateContext(const SurfaceConfig & config,
                                         LoggingFunc loggingFunc = nullptr);
 
 
+namespace details
+{
+
 /// @brief changes shader filename path for current API and extension format
 /// @param path - shader filename path in GLSL format
 /// @param extension - extension that should have result file
@@ -333,6 +336,7 @@ inline std::filesystem::path ResolveShaderExtension(const std::filesystem::path 
   result += extension;
   return result;
 }
+} // namespace details
 
 } // namespace RHI
 
