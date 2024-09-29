@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.14)
 include(FetchContent)
 set(FETCHCONTENT_QUIET FALSE)
 
-option(BUILD_EXAMPLES "Build example programs" ON)
-option(VULKAN_BACKEND "use vulkan as backend" ON)
+option(RHI_BUILD_EXAMPLES "Build example programs" ON)
+option(RHI_VULKAN_BACKEND "use vulkan as backend" ON)
 
 project(RHI C CXX)
 set(SOURCE_DIR ${PROJECT_SOURCE_DIR}/Source)
@@ -22,6 +22,6 @@ endif()
 
 
 ADD_SUBDIRECTORY(${SOURCE_DIR})
-if (${BUILD_EXAMPLES})
+if (${RHI_BUILD_EXAMPLES})
 	add_subdirectory(${EXAMPLES_DIR})
-endif(${BUILD_EXAMPLES})
+endif(${RHI_BUILD_EXAMPLES})

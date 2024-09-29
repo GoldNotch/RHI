@@ -7,7 +7,9 @@ PUBLIC
 	"RHI.hpp"
 )
 
+if (${RHI_VULKAN_BACKEND})
 add_subdirectory(Vulkan)
+endif()
 #add_subdirectory(DirectXImpl)
 
 target_include_directories(${PROJECT_NAME} 
