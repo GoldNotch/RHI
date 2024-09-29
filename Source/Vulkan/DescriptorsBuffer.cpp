@@ -164,7 +164,7 @@ void DescriptorBuffer::Bind(const vk::CommandBuffer & buffer, vk::PipelineLayout
   if (!m_buffers.empty())
   {
     const VkDescriptorSet set = m_set;
-    vkCmdBindDescriptorSets(buffer, bindPoint, pipelineLayout, 0, 1, &set, 1, nullptr);
+    vkCmdBindDescriptorSets(buffer, bindPoint, pipelineLayout, 0, 1, &set, 0, nullptr);
   }
 }
 

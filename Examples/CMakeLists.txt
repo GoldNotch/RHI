@@ -12,3 +12,4 @@ FetchContent_MakeAvailable(glfw3)
 add_custom_target("ExampleShaders" )
 
 add_subdirectory(HelloTriangle)
+add_subdirectory(Uniforms)

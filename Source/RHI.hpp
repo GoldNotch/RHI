@@ -304,3 +304,14 @@ std::unique_ptr<IContext> CreateContext(const SurfaceConfig & config,
                                         LoggingFunc loggingFunc = nullptr);
 
 } // namespace RHI
+
+
+constexpr inline RHI::ShaderType operator|(RHI::ShaderType t1, RHI::ShaderType t2)
+{
+  return static_cast<RHI::ShaderType>(static_cast<uint8_t>(t1) | static_cast<uint8_t>(t2));
+}
+
+constexpr inline RHI::ShaderType operator&(RHI::ShaderType t1, RHI::ShaderType t2)
+{
+  return static_cast<RHI::ShaderType>(static_cast<uint8_t>(t1) & static_cast<uint8_t>(t2));
+}
