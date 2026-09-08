@@ -190,6 +190,7 @@ IAwaitable * Context::RenderPass(IFramebuffer * framebuffer,
   auto * fbo = FastDynamicCast<Framebuffer>(framebuffer);
   if (!fbo)
     return nullptr;
+  fbo->Invalidate();
   SubmitTask * result = nullptr;
   m_graphicSubmitter.WaitForSubmitCompleted(); //TODO: think about removing this line
   std::vector<VkSemaphore> waitSemaphores;

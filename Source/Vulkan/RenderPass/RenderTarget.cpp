@@ -79,9 +79,14 @@ void RenderTarget::SetExtent(const VkExtent3D & extent) noexcept
   m_extent = extent;
 }
 
-const std::vector<VkClearValue> & RenderTarget::GetClearValues() const & noexcept
+std::span<const VkClearValue> RenderTarget::GetClearValues() const noexcept
 {
   return m_clearValues;
+}
+
+std::span<const VkImageView> RenderTarget::GetImageViews() const noexcept
+{
+  return m_attachedImages;
 }
 
 std::span<const VkSemaphore> RenderTarget::GetImageAvailableForRenderSemaphores() const noexcept
@@ -94,10 +99,8 @@ void RenderTarget::SetAttachments(std::vector<VkImageView> && views,
                                   std::vector<VkSemaphore> && imageSemaphores) noexcept
 {
   if (views != m_attachedImages)
-  {
-    m_attachedImages = std::move(views);
     m_invalidFramebuffer = true;
-  }
+  m_attachedImages = std::move(views);
   m_clearValues = std::move(clearValues);
   m_imageAvailabilitySemaphores = std::move(imageSemaphores);
 }

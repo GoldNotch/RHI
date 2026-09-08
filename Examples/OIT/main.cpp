@@ -37,7 +37,7 @@ void ProcessInput(RHI::test_examples::Window & window, RHI::test_examples::Camer
     camera.MoveCamera(camera.GetRightVector());
 }
 
-void SetupCubeInputAttributes(RHI::IPipeline * pipeline)
+void SetupCubeInputAttributes(RHI::PipelinePtr pipeline)
 {
   // set matrix binding
   pipeline->AddInputBinding(0, sizeof(glm::mat4), RHI::InputBindingType::InstanceData);
@@ -52,8 +52,8 @@ void SetupCubeInputAttributes(RHI::IPipeline * pipeline)
   pipeline->AddInputAttribute(1, 4, 0, 4, RHI::InputAttributeElementType::FLOAT);
 }
 
-int main() 
-{ 
+int main()
+{
   std::atomic_bool isRunningFlag = true;
   RHI::test_examples::GlfwInstance instance;
   RHI::test_examples::Window window("OIT", 800, 600);
@@ -88,7 +88,7 @@ int main()
     lastColorAttachment->SetClearValue(0, 0, 0, 0);
     sumColorAttachment->SetClearValue(0, 0, 0, 0);
     countFragmentsAttachment->SetClearValue(0, 0, 0, 0);
-    depthAttachment->SetClearValue(1.0, 0); 
+    depthAttachment->SetClearValue(1.0, 0);
     surfaceAttachment->SetClearValue(0, 0, 0, 1);
 
     framebuffer->AddAttachment(0, lastColorAttachment);
@@ -134,7 +134,7 @@ int main()
 
   // pipelines
 
-  auto opacityPipeline = framebuffer->CreatePipeline();
+  auto opacityPipeline = ctx->CreatePipeline();
   {
     // setup attachments
     opacityPipeline->BindAttachment(0, RHI::ShaderAttachmentSlot::Color);
@@ -175,7 +175,7 @@ int main()
   //  SetupCubeInputAttributes(opacityPipeline);
   //}
 
-  auto summaryPipeline = framebuffer->CreatePipeline();
+  auto summaryPipeline = ctx->CreatePipeline();
   {
     // setup attachments
     summaryPipeline->BindAttachment(0,
@@ -185,7 +185,7 @@ int main()
     summaryPipeline->BindAttachment(1, RHI::ShaderAttachmentSlot::Preserved);
     summaryPipeline->BindAttachment(2, RHI::ShaderAttachmentSlot::Preserved);
     summaryPipeline->BindAttachment(3, RHI::ShaderAttachmentSlot::Preserved);
-    summaryPipeline->BindResolver(4, 0); 
+    summaryPipeline->BindResolver(4, 0);
     // set shaders
     summaryPipeline->AttachShader(RHI::ShaderType::Vertex, ReadSpirV(FromGLSL("quad.vert")));
     summaryPipeline->AttachShader(RHI::ShaderType::Fragment,
@@ -193,8 +193,8 @@ int main()
     summaryPipeline->SetMeshTopology(RHI::MeshTopology::TriangleFan);
   }
 
-  // processes 
-   
+  // processes
+
   RHI::PipelineProcessPtr opacityProcess = ctx->CreateProcess();
   {
     auto [width, height] = window.GetSize();
@@ -204,8 +204,8 @@ int main()
     opacityProcess->BindVertexBuffer(1, cubesColorsBuffer, 0);
     opacityProcess->DrawVertices(36, c_MaxCubesCount);
   }
-  opacityPipeline->SetRenderProcess(std::move(opacityProcess));
-   
+
+
   RHI::PipelineProcessPtr accumProcess = ctx->CreateProcess();
   {
     auto [width, height] = window.GetSize();
@@ -222,8 +222,8 @@ int main()
     summaryProcess->SetScissor(0, 0, width, height);
     summaryProcess->DrawVertices(4, 1);
   }
-  summaryPipeline->SetRenderProcess(summaryProcess);
-
+  framebuffer->SetSubpass(0, opacityPipeline, std::move(opacityProcess));
+  framebuffer->SetSubpass(1, summaryPipeline, summaryProcess);
 
   window.MainLoop(
     [=, &ctx, &window, &camera, &isRunningFlag](float delta)

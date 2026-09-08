@@ -53,10 +53,11 @@ void Pipeline::BindAttachment(uint32_t binding, ShaderAttachmentSlot slot,
         "Input attachments require valid layout index. Don't forget to declare this uniform in fragment shader");
     }
     const VkDescriptorType type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-    GetDescriptorsLayout()
-      .DeclareDescriptorsArray(inputIndex, type, RHI::ShaderType::Fragment,
-                               1); // input attachments are fragment-shader-only feature
-    auto uniform = std::make_unique<InputAttachmentUniform>(GetContext(), *this, inputIndex);
+    // input attachments are fragment-shader-only feature
+    // https://vulkan.lunarg.com/doc/view/1.4.335.0/linux/antora/spec/latest/chapters/interfaces.html#interfaces-inputattachment
+    GetDescriptorsLayout().DeclareDescriptorsArray(inputIndex, type, RHI::ShaderType::Fragment, 1);
+    auto uniform =
+      std::make_unique<InputAttachmentUniform>(GetContext(), *this, inputIndex, binding);
     m_descriptors.push_back(std::move(uniform));
   }
 }
@@ -183,7 +184,7 @@ const PipelineAttachmentsUsage & Pipeline::GetAttachmentUsageInfo() const & noex
   return m_attachmentsStat;
 }
 
-void Pipeline::BuildAsGraphicPipeline(RenderPass & renderPass, uint32_t subpassIndex)
+void Pipeline::Invalidate(RenderPass & renderPass, uint32_t subpassIndex)
 {
   for (auto && uniformPtr : m_descriptors)
     uniformPtr->Invalidate();
@@ -201,7 +202,7 @@ void Pipeline::BuildAsGraphicPipeline(RenderPass & renderPass, uint32_t subpassI
     m_invalidPipeline = true;
   }
 
-  if (m_invalidPipeline || !m_pipeline)
+  if (m_invalidPipeline || !m_pipeline || m_bindPoint != &renderPass)
   {
     m_pipelineBuilder.SetSamplesCount(renderPass.GetFramebuffer().CalcSamplesCount());
     auto new_pipeline = m_pipelineBuilder.Make(GetContext().GetGpuConnection().GetDevice(),
@@ -212,6 +213,7 @@ void Pipeline::BuildAsGraphicPipeline(RenderPass & renderPass, uint32_t subpassI
                      "Graphic VkPipeline({}) has been rebuilt - {}",
                      static_cast<void *>(m_pipeline), static_cast<void *>(new_pipeline));
     m_pipeline = new_pipeline;
+    m_bindPoint = &renderPass;
     m_invalidPipeline = false;
     m_invalidPipeline.notify_one();
   }
@@ -237,6 +239,11 @@ DescriptorBufferLayout & Pipeline::GetDescriptorsLayout() & noexcept
 DescriptorBuffer & Pipeline::GetDescriptorBuffer() & noexcept
 {
   return m_descriptorBuffer;
+}
+
+PipelineBindPoint Pipeline::GetBindPoint() const noexcept
+{
+  return m_bindPoint;
 }
 
 } // namespace RHI::vulkan

@@ -57,17 +57,14 @@ public: // RHI-only API
   RHI::SamplesCount CalcSamplesCount() const noexcept;
 
 protected:
-  std::vector<RenderTarget> m_targets;
-  uint32_t m_activeTarget = -1;
   RenderPass m_renderPass;
+  std::vector<RenderTarget> m_targets; //TODO: small_vector
+  uint32_t m_activeTarget = -1;
 
+  //TODO: shared_ptr
   std::vector<IInternalAttachment *> m_attachments; //sort by count of buffers
-  bool m_attachmentsChanged = false;
   std::vector<VkAttachmentDescription> m_attachmentDescriptions;
-
-  uint32_t m_framesCount = 0;
-
-  std::atomic_bool m_frameStarted = false;
+  bool m_attachmentsChanged = false;
 };
 
 } // namespace RHI::vulkan

@@ -14,7 +14,7 @@ struct Context;
 namespace RHI::vulkan
 {
 
-struct RenderTarget : public OwnedBy<Context>
+struct RenderTarget final : public OwnedBy<Context>
 {
   explicit RenderTarget(Context & ctx);
   virtual ~RenderTarget() override;
@@ -30,7 +30,8 @@ public:
 
   VkFramebuffer GetHandle() const noexcept { return m_framebuffer; }
   VkExtent3D GetVkExtent() const noexcept { return m_extent; }
-  const std::vector<VkClearValue> & GetClearValues() const & noexcept;
+  std::span<const VkClearValue> GetClearValues() const noexcept;
+  std::span<const VkImageView> GetImageViews() const noexcept;
   std::span<const VkSemaphore> GetImageAvailableForRenderSemaphores() const noexcept;
 
   void SetAttachments(std::vector<VkImageView> && views, std::vector<VkClearValue> && clearValues,

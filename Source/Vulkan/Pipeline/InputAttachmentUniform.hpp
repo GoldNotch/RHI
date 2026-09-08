@@ -10,7 +10,8 @@ namespace RHI::vulkan
 
 struct InputAttachmentUniform final : public details::BaseDescriptor
 {
-  explicit InputAttachmentUniform(Context & ctx, Pipeline & pipeline, LayoutIndex index);
+  explicit InputAttachmentUniform(Context & ctx, Pipeline & pipeline, LayoutIndex index,
+                                  uint32_t attachmentIdx);
   virtual ~InputAttachmentUniform() override = default;
 
 
@@ -23,6 +24,9 @@ public: // IResourceUser
 public: // IInvalidable interface
   virtual void Invalidate() override;
   void SetInvalid();
+
+private:
+    uint32_t m_attachmentIndex = -1;
 };
 
 } // namespace RHI::vulkan

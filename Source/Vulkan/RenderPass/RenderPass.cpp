@@ -53,6 +53,7 @@ void RenderPass::RecordCommands(details::CommandBuffer & commands, RenderTarget 
 {
   assert(m_renderPass);
   assert(renderTarget.GetAttachmentsCount() == m_cachedAttachments.size());
+  m_activeRenderTarget = &renderTarget;
   VkFramebuffer buf = renderTarget.GetHandle();
   VkExtent3D extent = renderTarget.GetVkExtent();
   auto && clearValues = renderTarget.GetClearValues();
@@ -90,6 +91,8 @@ void RenderPass::RecordCommands(details::CommandBuffer & commands, RenderTarget 
   {
     for (size_t i = 0; auto && [pipeline, process] : m_subpasses)
     {
+        //pipeline->SynchroniseResources(commands);
+        //process->SynchroniseResources(commands);
       pipeline->BindToCommandBuffer(commands, VK_PIPELINE_BIND_POINT_GRAPHICS);
       process->RecordCommands(commands, *pipeline);
       if (i + 1 != m_subpasses.size())
@@ -104,6 +107,7 @@ void RenderPass::RecordCommands(details::CommandBuffer & commands, RenderTarget 
 
   commands.PushCommand(vkCmdEndRenderPass);
 
+  // probably it doesn't needed
   GetFramebuffer().ForEachAttachment(
     [it = m_cachedAttachments.begin()](IInternalAttachment * att) mutable
     {
@@ -111,6 +115,7 @@ void RenderPass::RecordCommands(details::CommandBuffer & commands, RenderTarget 
         att->OnEndRenderPass(it->finalLayout);
       ++it;
     });
+  m_activeRenderTarget = nullptr;
 }
 
 void RenderPass::CollectAttachmentsUsageInfo(std::span<VkImageUsageFlags> usage) const
@@ -142,22 +147,13 @@ void RenderPass::SynchroniseResources(details::CommandBuffer & commands) const
 }
 
 void RenderPass::SetAttachments(uint32_t buffersCount,
-                                const std::vector<VkAttachmentDescription> & attachments) noexcept
+                                std::span<const VkAttachmentDescription> attachments) noexcept
 {
-  if (m_cachedAttachments != attachments)
+  if (!std::ranges::equal(m_cachedAttachments, attachments))
   {
-    m_cachedAttachments = attachments;
+    m_cachedAttachments.assign(attachments.begin(), attachments.end());
     m_invalidRenderPass = true;
   }
-  if (buffersCount != m_buffersCount)
-  {
-    m_buffersCount = buffersCount;
-  }
-}
-
-const VkAttachmentDescription & RenderPass::GetAttachmentDescription(uint32_t idx) const & noexcept
-{
-  return m_cachedAttachments[idx];
 }
 
 void RenderPass::Invalidate()
@@ -184,10 +180,10 @@ void RenderPass::Invalidate()
 
   //m_dummyPipeline->BuildAsGraphicPipeline(*this, 0);
 
-  // rebuild subpasses
+  // rebuild pipelines
   for (uint32_t i = 0; auto && [pipeline, process] : m_subpasses)
   {
-    pipeline->BuildAsGraphicPipeline(*this, i);
+    pipeline->Invalidate(*this, i);
     //TODO: reset commands?
     ++i;
   }

@@ -8,7 +8,7 @@
 #include <Memory/ResourceUser.hpp>
 #include <Private/OwnedBy.hpp>
 #include <RHI.hpp>
-#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan.h>
 
 namespace RHI::vulkan
 {
@@ -36,8 +36,7 @@ public:
   void ClearSubpasses();
 
   void SetAttachments(uint32_t buffersCount,
-                      const std::vector<VkAttachmentDescription> & attachments) noexcept;
-  const VkAttachmentDescription & GetAttachmentDescription(uint32_t idx) const & noexcept;
+                      std::span<const VkAttachmentDescription> attachments) noexcept;
 
 public: // IInvalidable Interface
   virtual void Invalidate() override;
@@ -45,6 +44,7 @@ public: // IInvalidable Interface
 
 public: // internal public API
   VkRenderPass GetHandle() const noexcept { return m_renderPass; }
+  const RenderTarget * GetActiveRenderTarget() const noexcept { return m_activeRenderTarget; }
 
   void RecordCommands(details::CommandBuffer & commands, RenderTarget & renderTarget);
   void CollectAttachmentsUsageInfo(std::span<VkImageUsageFlags> usage) const;
@@ -54,8 +54,8 @@ public: // IResourceUser
   void SynchroniseResources(details::CommandBuffer & commands) const;
 
 private:
-  using Subpass = std::pair<std::shared_ptr<Pipeline>, std::shared_ptr<PipelineProcess>>;
   std::vector<VkAttachmentDescription> m_cachedAttachments;
+  const RenderTarget * m_activeRenderTarget = nullptr;
 
   /// There is a lot of thread-readers, so it's must be synchronized access
   VkRenderPass m_renderPass = VK_NULL_HANDLE;
@@ -63,10 +63,7 @@ private:
   details::CommandBuffer m_writeBuffer;
   details::CommandBuffer m_execBuffer;
 
-  /// Flag to notify that subpasses can begin pass
-  std::atomic_bool m_isReadyForRendering = false;
-
-  uint32_t m_buffersCount = 0;
+  using Subpass = std::pair<std::shared_ptr<Pipeline>, std::shared_ptr<PipelineProcess>>;
   std::vector<Subpass> m_subpasses;
   bool m_dirtyCommands = false;
 

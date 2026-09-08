@@ -23,6 +23,7 @@ struct CommandBuffer;
 
 namespace RHI::vulkan
 {
+using PipelineBindPoint = RenderPass *; // std::variant<RenderPass*, ComputePass*, RayTracePass*>
 
 struct Pipeline final : public IPipeline,
                         public OwnedBy<Context>
@@ -65,7 +66,7 @@ public: // IResourceUser
   const PipelineAttachmentsUsage & GetAttachmentUsageInfo() const & noexcept;
 
 public:
-  void BuildAsGraphicPipeline(RenderPass & renderPass, uint32_t subpassIndex);
+  void Invalidate(RenderPass & renderPass, uint32_t subpassIndex);
   void SetInvalid();
 
 public: // public internal API
@@ -74,8 +75,10 @@ public: // public internal API
   const DescriptorBufferLayout & GetDescriptorsLayout() const & noexcept;
   DescriptorBufferLayout & GetDescriptorsLayout() & noexcept;
   DescriptorBuffer & GetDescriptorBuffer() & noexcept;
+  PipelineBindPoint GetBindPoint() const noexcept;
 
 private:
+  PipelineBindPoint m_bindPoint = nullptr; ///< object pipeline is bound to
   VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
   VkPipeline m_pipeline = VK_NULL_HANDLE;
 

@@ -57,7 +57,7 @@ vkb::Instance CreateInstance(const char * appName, uint32_t apiVersion, void * d
 #endif
                     .set_debug_callback(VulkanDebugCallback)
                     .set_debug_callback_user_data_pointer(debugUserData)
-                    //.set_minimum_instance_version(apiVersion) // comment if you run with RenderDoc, because it can use vulkan higher 1.0
+                    .set_minimum_instance_version(apiVersion) // comment if you run with RenderDoc, because it can use vulkan higher 1.0
                     .build();
   if (!inst_ret || !inst_ret.has_value())
   {

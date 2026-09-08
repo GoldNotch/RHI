@@ -31,7 +31,7 @@ Framebuffer::~Framebuffer()
 
 size_t Framebuffer::GetImagesCount() const noexcept
 {
-  return m_framesCount;
+  return m_targets.size();
 }
 
 void Framebuffer::Invalidate()
@@ -128,8 +128,6 @@ RenderTarget * Framebuffer::BeginFrame()
 {
   if (m_attachments.empty())
     return nullptr;
-
-  Invalidate();
 
   std::vector<VkImageView> renderingImages;
   std::vector<VkSemaphore> semaphores;
