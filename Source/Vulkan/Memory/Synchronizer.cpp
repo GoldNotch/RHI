@@ -104,6 +104,14 @@ VkAccessFlags ConvertAccessFlagsFromVk2ToVk1(VkAccessFlags2 flags) noexcept
     return it->second;
   return VK_ACCESS_NONE;
 }
+
+bool IsFramebufferSpaceStage(VkPipelineStageFlags stage) noexcept
+{
+  const VkPipelineStageFlags framebufferStages =
+    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+    VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+  return static_cast<bool>(stage & framebufferStages);
+}
 } // namespace
 
 namespace RHI::vulkan::details
@@ -171,6 +179,9 @@ void Synchronizer::RequireSynchronize(VkPipelineStageFlags2 currentStage,
   barrierInfo.currentStage = currentStage;
   barrierInfo.requiredAccess = requiredAccess;
   barrierInfo.requiredLayout = requiredLayout;
+  VkDependencyFlags dependencyFlags = 0;
+  if (IsFramebufferSpaceStage(m_prevBarrier.currentStage))
+    dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
   std::lock_guard lk{m_syncMutex};
   if (GetContext().GetGpuConnection().CheckExtension("VK_KHR_synchronization2") &&
       GetContext().GetGpuConnection().GetVulkanVersion() >= VK_API_VERSION_1_3)
@@ -179,6 +190,7 @@ void Synchronizer::RequireSynchronize(VkPipelineStageFlags2 currentStage,
     VkImageMemoryBarrier2 imageBarrier{};
     VkBufferMemoryBarrier2 bufferBarrier{};
     info.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    info.dependencyFlags = dependencyFlags;
     if (m_image)
     {
       imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -262,7 +274,7 @@ void Synchronizer::RequireSynchronize(VkPipelineStageFlags2 currentStage,
     }
     commands.PushCommand(vkCmdPipelineBarrier,
                          ConvertPipelineStageFromVk2ToVk1(m_prevBarrier.currentStage),
-                         ConvertPipelineStageFromVk2ToVk1(currentStage), 0 /*dependencyFlags*/, 0,
+                         ConvertPipelineStageFromVk2ToVk1(currentStage), dependencyFlags, 0,
                          nullptr, m_buffer ? 1 : 0, &bufferBarrier, m_image ? 1 : 0, &imageBarrier);
   }
   m_prevBarrier = barrierInfo;
@@ -275,10 +287,10 @@ VkImageLayout Synchronizer::GetLayout() const noexcept
   return m_prevBarrier.requiredLayout;
 }
 
-void Synchronizer::SetLayout(VkImageLayout layout) noexcept
+void Synchronizer::ExternalSynchronization(const BarrierInfo & barrier) noexcept
 {
   std::lock_guard lk{m_syncMutex};
-  m_prevBarrier.requiredLayout = layout;
+  m_prevBarrier = barrier;
 }
 
 } // namespace RHI::vulkan::details

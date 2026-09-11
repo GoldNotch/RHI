@@ -30,7 +30,7 @@ public:
 
 public: // IResourceUser
   virtual void CollectResources(std::vector<ResourcePtr> & resources) const override;
-  virtual void SynchroniseResources(details::CommandBuffer & commands) const override;
+  virtual void SynchroniseResources(SynchronizationFilter filter, details::CommandBuffer & commands) const override;
 
 public: // IUniformDescriptor interface
   virtual uint32_t GetSet() const noexcept override { return BaseDescriptor::GetSet(); }

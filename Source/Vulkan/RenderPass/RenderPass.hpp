@@ -17,6 +17,10 @@ struct RenderTarget;
 struct Framebuffer;
 struct Pipeline;
 struct PipelineProcess;
+namespace utils
+{
+struct RenderPassBuilder;
+}
 } // namespace RHI::vulkan
 
 namespace RHI::vulkan
@@ -51,12 +55,10 @@ public: // internal public API
 
 public: // IResourceUser
   void CollectResources(std::vector<ResourcePtr> & resources) const;
-  void SynchroniseResources(details::CommandBuffer & commands) const;
 
 private:
-  std::vector<VkAttachmentDescription> m_cachedAttachments;
   const RenderTarget * m_activeRenderTarget = nullptr;
-
+  std::unique_ptr<utils::RenderPassBuilder> m_builder = nullptr;
   /// There is a lot of thread-readers, so it's must be synchronized access
   VkRenderPass m_renderPass = VK_NULL_HANDLE;
   bool m_invalidRenderPass = false;

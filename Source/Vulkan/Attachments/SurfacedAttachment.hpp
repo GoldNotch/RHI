@@ -51,8 +51,6 @@ public: // IInternalAttachment interface
   virtual uint32_t GetBuffering() const noexcept override;
   virtual RHI::SamplesCount GetSamplesCount() const noexcept override;
   virtual VkAttachmentDescription BuildDescription() const noexcept override;
-  virtual void OnBeginRenderPass(VkImageLayout initialLayout) noexcept override;
-  virtual void OnEndRenderPass(VkImageLayout finalLayout) noexcept override;
   virtual void Resize(const VkExtent2D & new_extent) noexcept;
   virtual details::Synchronizer & GetSynchronizer() & noexcept override;
 

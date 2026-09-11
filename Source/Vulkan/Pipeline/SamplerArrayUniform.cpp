@@ -86,14 +86,18 @@ void SamplerArrayUniform::CollectResources(std::vector<ResourcePtr> & resources)
   }
 }
 
-void SamplerArrayUniform::SynchroniseResources(details::CommandBuffer & commands) const
+void SamplerArrayUniform::SynchroniseResources(SynchronizationFilter filter,
+                                               details::CommandBuffer & commands) const
 {
-  for (auto * texture : m_boundTextures)
+  if (FilterSatisfied(filter, SynchronizationFilter::ImageOnly))
   {
-    if (texture)
-      texture->GetSynchronizer().RequireSynchronize(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-                                                    VK_ACCESS_2_SHADER_READ_BIT, commands,
-                                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    for (auto * texture : m_boundTextures)
+    {
+      if (texture)
+        texture->GetSynchronizer().RequireSynchronize(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                                                      VK_ACCESS_2_SHADER_READ_BIT, commands,
+                                                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
   }
 }
 

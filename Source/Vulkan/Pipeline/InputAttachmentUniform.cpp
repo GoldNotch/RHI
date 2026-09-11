@@ -4,8 +4,8 @@
 #include <Pipeline/DescriptorBufferLayout.hpp>
 #include <Pipeline/Pipeline.hpp>
 #include <Private/FastDynamicCast.hpp>
+#include <RenderPass/Framebuffer.hpp>
 #include <RenderPass/RenderPass.hpp>
-#include <RenderPass/RenderTarget.hpp>
 #include <Utils/CastHelper.hpp>
 #include <VulkanContext.hpp>
 
@@ -23,9 +23,10 @@ void InputAttachmentUniform::UpdateDescriptorSet(std::span<const VkDescriptorSet
   VkDescriptorImageInfo imageInfo{};
   if (RenderPass * renderPass = GetPipeline().GetBindPoint())
   {
-    auto * target = renderPass->GetActiveRenderTarget();
-    assert(target);
-    imageInfo.imageView = target->GetImageViews()[m_attachmentIndex];
+    auto attachment = renderPass->GetFramebuffer().GetAttachment(m_attachmentIndex);
+    if (!attachment)
+      return;
+    imageInfo.imageView = attachment->GetImageView();
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
   }
 
@@ -44,8 +45,20 @@ void InputAttachmentUniform::CollectResources(std::vector<ResourcePtr> & resourc
 {
 }
 
-void InputAttachmentUniform::SynchroniseResources(details::CommandBuffer & commands) const
+void InputAttachmentUniform::SynchroniseResources(SynchronizationFilter filter,
+                                                  details::CommandBuffer & commands) const
 {
+  if (FilterSatisfied(filter, SynchronizationFilter::ImageOnly))
+  {
+    if (RenderPass * renderPass = GetPipeline().GetBindPoint())
+    {
+      auto attachment = renderPass->GetFramebuffer().GetAttachment(m_attachmentIndex);
+      attachment->GetSynchronizer().RequireSynchronize(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                                                       VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT,
+                                                       commands,
+                                                       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    }
+  }
 }
 
 void InputAttachmentUniform::Invalidate()

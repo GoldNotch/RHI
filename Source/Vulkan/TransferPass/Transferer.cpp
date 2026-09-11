@@ -30,7 +30,7 @@ void Transferer::CollectResources(std::vector<ResourcePtr> & resources) const
   resources.insert(resources.end(), m_resourcesToSync.begin(), m_resourcesToSync.end());
 }
 
-void Transferer::SynchroniseResources(details::CommandBuffer & commands) const
+void Transferer::SynchroniseResources(SynchronizationFilter filter, details::CommandBuffer & commands) const
 {
   //Do nothing, because commands synchronise resources themselfs
 }

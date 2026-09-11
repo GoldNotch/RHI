@@ -57,8 +57,12 @@ public: // Commands
   virtual void PushConstant(const void * data, size_t size) override;
 
 public: // IResourceUser
+  /// @brief return true if process uses vkCmdPipelineBarrier.
+  /// used to detect if RenderPass should have self-dependency
+  bool RequireSynchronization() const;
   virtual void CollectResources(std::vector<ResourcePtr> & resources) const override;
-  virtual void SynchroniseResources(details::CommandBuffer & commands) const override;
+  virtual void SynchroniseResources(SynchronizationFilter filter,
+                                    details::CommandBuffer & commands) const override;
 
 public:
   void RecordCommands(details::CommandBuffer & commands, const Pipeline & pipeline);

@@ -248,16 +248,6 @@ VkAttachmentDescription SurfacedAttachment::BuildDescription() const noexcept
   return description;
 }
 
-void SurfacedAttachment::OnBeginRenderPass(VkImageLayout initialLayout) noexcept
-{
-  m_synchronizers[m_activeImage].SetLayout(initialLayout);
-}
-
-void SurfacedAttachment::OnEndRenderPass(VkImageLayout finalLayout) noexcept
-{
-  m_synchronizers[m_activeImage].SetLayout(finalLayout);
-}
-
 void SurfacedAttachment::Resize(const VkExtent2D & new_extent) noexcept
 {
   // do nothing because resizing handled in AcquireForRend

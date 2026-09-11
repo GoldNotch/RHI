@@ -41,7 +41,6 @@ public: // ICommandWriter
 
 public: // IResourceUser
   void CollectResources(std::vector<ResourcePtr> & resources) const;
-  void SynchroniseResources(details::CommandBuffer & commands) const;
 
 public: // RHI-only API
   size_t GetImagesCount() const noexcept;
@@ -68,11 +67,3 @@ protected:
 };
 
 } // namespace RHI::vulkan
-
-
-/// @brief Compare operator for VkAttachmentDescription
-inline bool operator==(const VkAttachmentDescription & lhs,
-                       const VkAttachmentDescription & rhs) noexcept
-{
-  return std::memcmp(&lhs, &rhs, sizeof(VkAttachmentDescription)) == 0;
-}

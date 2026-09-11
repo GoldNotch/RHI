@@ -267,16 +267,6 @@ VkAttachmentDescription GenericAttachment::BuildDescription() const noexcept
   return BuildAttachmentDescription(m_description, m_samplesCount);
 }
 
-void GenericAttachment::OnBeginRenderPass(VkImageLayout initialLayout) noexcept
-{
-  m_synchronizers[m_activeImage].SetLayout(initialLayout);
-}
-
-void GenericAttachment::OnEndRenderPass(VkImageLayout finalLayout) noexcept
-{
-  m_synchronizers[m_activeImage].SetLayout(finalLayout);
-}
-
 void GenericAttachment::Resize(const VkExtent2D & new_extent) noexcept
 {
   m_description.extent = {static_cast<texel_t>(new_extent.width),

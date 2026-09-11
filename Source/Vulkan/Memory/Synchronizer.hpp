@@ -14,6 +14,16 @@ namespace RHI::vulkan
 struct Context;
 }
 
+namespace RHI::vulkan
+{
+struct BarrierInfo final
+{
+  VkPipelineStageFlags2 currentStage = VK_PIPELINE_STAGE_2_NONE;
+  VkAccessFlagBits2 requiredAccess = VK_ACCESS_2_NONE;
+  VkImageLayout requiredLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+};
+} // namespace RHI::vulkan
+
 namespace RHI::vulkan::details
 {
 struct Synchronizer final : public OwnedBy<Context>
@@ -34,15 +44,9 @@ public:
 
   VkImageLayout GetLayout() const noexcept;
   /// @brief for external set of layout (f.e. in renderPass begin/end)
-  void SetLayout(VkImageLayout layout) noexcept;
+  void ExternalSynchronization(const BarrierInfo & barrier) noexcept;
 
 private:
-  struct BarrierInfo
-  {
-    VkPipelineStageFlags2 currentStage;
-    VkAccessFlagBits2 requiredAccess;
-    VkImageLayout requiredLayout;
-  };
   VkImage m_image = VK_NULL_HANDLE;   ///< synchronizable image
   VkBuffer m_buffer = VK_NULL_HANDLE; ///< synchronizable buffer
 

@@ -74,9 +74,9 @@ void BufferUniform::CollectResources(std::vector<ResourcePtr> & resources) const
     resources.push_back(m_buffer);
 }
 
-void BufferUniform::SynchroniseResources(details::CommandBuffer & commands) const
+void BufferUniform::SynchroniseResources(SynchronizationFilter filter, details::CommandBuffer & commands) const
 {
-  if (m_buffer)
+  if (m_buffer && FilterSatisfied(filter, SynchronizationFilter::BufferOnly))
   {
     m_buffer->GetSynchronizer().RequireSynchronize(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                                                    VK_ACCESS_2_SHADER_READ_BIT, commands,

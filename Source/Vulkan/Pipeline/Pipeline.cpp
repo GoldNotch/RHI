@@ -165,6 +165,11 @@ void Pipeline::BindToCommandBuffer(details::CommandBuffer & commands,
   }
 }
 
+bool Pipeline::RequireSynchronization() const
+{
+  return !m_descriptors.empty();
+}
+
 void Pipeline::CollectResources(std::vector<ResourcePtr> & resources) const
 {
   // collect descriptors and uniforms
@@ -172,11 +177,12 @@ void Pipeline::CollectResources(std::vector<ResourcePtr> & resources) const
     uniformPtr->CollectResources(resources);
 }
 
-void Pipeline::SynchroniseResources(details::CommandBuffer & commands) const
+void Pipeline::SynchroniseResources(SynchronizationFilter filter,
+                                    details::CommandBuffer & commands) const
 {
   // collect descriptors and uniforms
   for (auto && uniformPtr : m_descriptors)
-    uniformPtr->SynchroniseResources(commands);
+    uniformPtr->SynchroniseResources(filter, commands);
 }
 
 const PipelineAttachmentsUsage & Pipeline::GetAttachmentUsageInfo() const & noexcept

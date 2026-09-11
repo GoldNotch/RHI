@@ -58,9 +58,9 @@ void SamplerUniform::CollectResources(std::vector<ResourcePtr> & resources) cons
     resources.push_back(m_boundTexture);
 }
 
-void SamplerUniform::SynchroniseResources(details::CommandBuffer & commands) const
+void SamplerUniform::SynchroniseResources(SynchronizationFilter filter, details::CommandBuffer & commands) const
 {
-  if (m_boundTexture)
+  if (m_boundTexture && FilterSatisfied(filter, SynchronizationFilter::ImageOnly))
   {
     m_boundTexture->GetSynchronizer().RequireSynchronize(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
                                                          VK_ACCESS_2_SHADER_READ_BIT, commands,

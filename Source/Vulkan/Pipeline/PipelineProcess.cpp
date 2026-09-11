@@ -120,6 +120,11 @@ void PipelineProcess::PushConstant(const void * data, size_t size)
   m_commands.push_back(task);
 }
 
+bool PipelineProcess::RequireSynchronization() const
+{
+  return !m_resourceSyncInfos.empty();
+}
+
 void PipelineProcess::CollectResources(std::vector<ResourcePtr> & resources) const
 {
   for (auto && [ptr, _, __, ___] : m_resourceSyncInfos)
@@ -128,20 +133,21 @@ void PipelineProcess::CollectResources(std::vector<ResourcePtr> & resources) con
   }
 }
 
-void PipelineProcess::SynchroniseResources(details::CommandBuffer & commands) const
+void PipelineProcess::SynchroniseResources(SynchronizationFilter filter,
+                                           details::CommandBuffer & commands) const
 {
   for (auto && [objPtr, pipelineStage, access, layout] : m_resourceSyncInfos)
   {
     std::visit(std::overload(
-                 [pipelineStage, access, layout, &commands](IInternalBuffer * buffer)
+                 [pipelineStage, access, layout, &commands, filter](IInternalBuffer * buffer)
                  {
-                   if (buffer)
+                   if (buffer && FilterSatisfied(filter, SynchronizationFilter::BufferOnly))
                      buffer->GetSynchronizer().RequireSynchronize(pipelineStage, access, commands,
                                                                   layout);
                  },
-                 [pipelineStage, access, layout, &commands](IInternalTexture * texture)
+                 [pipelineStage, access, layout, &commands, filter](IInternalTexture * texture)
                  {
-                   if (texture)
+                   if (texture && FilterSatisfied(filter, SynchronizationFilter::ImageOnly))
                      texture->GetSynchronizer().RequireSynchronize(pipelineStage, access, commands,
                                                                    layout);
                  }),
