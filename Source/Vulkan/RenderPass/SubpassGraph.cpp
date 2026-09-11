@@ -1,9 +1,11 @@
-#include "RenderPassBuilder.hpp"
+#include "SubpassGraph.hpp"
 
 #include <algorithm>
 #include <numeric>
 #include <ranges>
 #include <span>
+
+#include <Attachments/Attachment.hpp>
 
 /// @brief Compare operator for VkAttachmentDescription
 static inline bool operator==(const VkAttachmentDescription & lhs,
@@ -17,8 +19,8 @@ namespace
 RHI::vulkan::BarrierInfo CalcAttachmentBarrier(const RHI::vulkan::BarrierInfo & prevBarrier,
                                                VkImageLayout newLayout) noexcept
 {
-  VkPipelineStageFlags stage = 0;
-  VkAccessFlags access = 0;
+  VkPipelineStageFlags2 stage = 0;
+  VkAccessFlags2 access = 0;
 
   switch (newLayout)
   {
@@ -100,67 +102,164 @@ bool IsFramebufferSpaceStage(VkPipelineStageFlags stage) noexcept
   return static_cast<bool>(stage & framebufferStages);
 }
 
-std::vector<RHI::vulkan::BarrierInfo> BuildAttachmentUsageTable(
-  std::span<const VkSubpassDescription> descriptions,
-  std::span<const VkAttachmentDescription> attachments)
+std::array<std::span<const VkAttachmentReference>, 3> ExtractSubpassAttachments(
+  const VkSubpassDescription & description) noexcept
 {
-  std::vector<RHI::vulkan::BarrierInfo> layoutsTable;
-  size_t attachmentsCount = attachments.size();
-  size_t subpassesCount = descriptions.size();
-  layoutsTable.resize((subpassesCount + 2) * attachmentsCount);
+  return {std::span<const VkAttachmentReference>(description.pColorAttachments,
+                                                 description.colorAttachmentCount),
+          std::span<const VkAttachmentReference>(description.pDepthStencilAttachment,
+                                                 description.pDepthStencilAttachment ? 1 : 0),
+          std::span<const VkAttachmentReference>(description.pInputAttachments,
+                                                 description.inputAttachmentCount)};
+}
 
+} // namespace
+
+namespace RHI::vulkan
+{
+
+bool SubpassGraph::SetAttachments(std::span<const VkAttachmentDescription> attachments)
+{
+  if (!std::ranges::equal(m_attachments, attachments))
+  {
+    m_attachments.assign(attachments.begin(), attachments.end());
+    m_attachmentsUsageTable.clear();
+    return true;
+  }
+  return false;
+}
+
+void SubpassGraph::BuildGraph(std::vector<VkSubpassDescription> && subpasses,
+                              std::vector<SubpassIndex> && selfDependencies)
+{
+  m_subpassDescriptions = std::move(subpasses);
+  BuildSubpassGraph();
+  BuildDependencyGraph(selfDependencies);
+}
+
+VkRenderPass SubpassGraph::MakeRenderPass(const VkDevice & device) const
+{
+  if (m_subpassDescriptions.empty() || m_attachments.empty())
+    return VK_NULL_HANDLE;
+
+  VkRenderPass renderPass = VK_NULL_HANDLE;
+  VkRenderPassCreateInfo renderPassCreateInfo{};
+  renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+  renderPassCreateInfo.attachmentCount = static_cast<uint32_t>(m_attachments.size());
+  renderPassCreateInfo.pAttachments = m_attachments.data();
+  renderPassCreateInfo.subpassCount = static_cast<uint32_t>(m_subpassDescriptions.size());
+  renderPassCreateInfo.pSubpasses = m_subpassDescriptions.data();
+  renderPassCreateInfo.dependencyCount = static_cast<uint32_t>(m_dependenciesGraph.size());
+  renderPassCreateInfo.pDependencies = m_dependenciesGraph.data();
+
+  if (auto res = vkCreateRenderPass(device, &renderPassCreateInfo, nullptr, &renderPass);
+      res != VK_SUCCESS)
+    throw std::runtime_error("Failed to create render pass");
+
+  return renderPass;
+}
+
+void SubpassGraph::ResetGraph()
+{
+  m_attachments.clear();
+  m_subpassDescriptions.clear();
+  m_dependenciesGraph.clear();
+  m_attachmentsUsageTable.clear();
+}
+
+void SubpassGraph::SynchronizeAttachmentsDuringRenderPass(
+  SubpassIndex subpassIndex, std::span<IInternalAttachment *> attachments)
+{
+  auto barriersRow = GetBarriersRow(subpassIndex);
+  for (size_t i = 0; auto attachment : attachments)
+  {
+    if (attachment)
+      attachment->GetSynchronizer().ExternalSynchronization(barriersRow[i]);
+    ++i;
+  }
+}
+
+std::span<const VkAttachmentDescription> SubpassGraph::GetCachedAttachments() const noexcept
+{
+  return m_attachments;
+}
+
+size_t SubpassGraph::GetBarrierRowIndex(SubpassIndex idx) const noexcept
+{
+  return idx == SubpassIndex::finalRenderPass ? m_subpassDescriptions.size()
+                                              : static_cast<size_t>(idx) + 1;
+}
+
+std::span<const BarrierInfo> SubpassGraph::GetBarriersRow(SubpassIndex idx) const noexcept
+{
+  size_t attachmentsCount = m_attachments.size();
+  return std::span<const BarrierInfo>{m_attachmentsUsageTable.begin() +
+                                        GetBarrierRowIndex(idx) * attachmentsCount,
+                                      attachmentsCount};
+}
+
+std::span<BarrierInfo> SubpassGraph::GetBarriersRow(SubpassIndex idx) noexcept
+{
+  size_t attachmentsCount = m_attachments.size();
+  return std::span<BarrierInfo>{m_attachmentsUsageTable.begin() +
+                                  GetBarrierRowIndex(idx) * attachmentsCount,
+                                attachmentsCount};
+}
+
+void SubpassGraph::BuildSubpassGraph()
+{
+  auto && layoutsTable = m_attachmentsUsageTable;
+  size_t attachmentsCount = m_attachments.size();
+  size_t subpassesCount = m_subpassDescriptions.size();
+  layoutsTable.resize((subpassesCount + 2) * attachmentsCount, BarrierInfo());
+
+  auto firstRow = GetBarriersRow(SubpassIndex::initialRenderPass);
+  auto lastRow = GetBarriersRow(SubpassIndex::finalRenderPass);
+
+  // fill initial and final stages
   for (size_t i = 0; i < attachmentsCount; ++i)
   {
     // initial barrier for attachment
-    layoutsTable[i] = RHI::vulkan::BarrierInfo{VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-                                               VK_ACCESS_2_NONE, attachments[i].initialLayout};
+    firstRow[i] = BarrierInfo{VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE,
+                              m_attachments[i].initialLayout};
     // final barrier for attachment
-    layoutsTable[(subpassesCount + 1) + i] =
-      RHI::vulkan::BarrierInfo{VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, VK_ACCESS_2_NONE,
-                               attachments[i].finalLayout};
+    lastRow[i] = BarrierInfo{VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, VK_ACCESS_2_NONE,
+                             m_attachments[i].finalLayout};
   }
 
-  std::span<const RHI::vulkan::BarrierInfo> prevRow(layoutsTable.begin(), attachmentsCount);
+  std::span<const BarrierInfo> prevRow = firstRow;
 
+  // fill subpass stages
   for (size_t i = 0; i < subpassesCount; ++i)
   {
-    auto && description = descriptions[i];
-    std::span<const VkAttachmentReference> colorAttachments(description.pColorAttachments,
-                                                            description.colorAttachmentCount);
-    std::span<const VkAttachmentReference>
-      depthStencilAttachments(description.pDepthStencilAttachment,
-                              description.pDepthStencilAttachment ? 1 : 0);
-    std::span<const VkAttachmentReference> inputAttachments(description.pInputAttachments,
-                                                            description.inputAttachmentCount);
-    std::span<RHI::vulkan::BarrierInfo> layoutsRow(layoutsTable.begin() +
-                                                     (i + 1) * attachmentsCount,
-                                                   attachmentsCount);
+    auto && description = m_subpassDescriptions[i];
+    auto [colorAttachments, dsAttachments, inputAttachments] =
+      ExtractSubpassAttachments(description);
+
+    std::span<RHI::vulkan::BarrierInfo> layoutsRow = GetBarriersRow(static_cast<SubpassIndex>(i));
     for (auto && ref : colorAttachments)
       layoutsRow[ref.attachment] = CalcAttachmentBarrier(prevRow[ref.attachment], ref.layout);
-    for (auto && ref : depthStencilAttachments)
+    for (auto && ref : dsAttachments)
       layoutsRow[ref.attachment] = CalcAttachmentBarrier(prevRow[ref.attachment], ref.layout);
     for (auto && ref : inputAttachments)
       layoutsRow[ref.attachment] = CalcAttachmentBarrier(prevRow[ref.attachment], ref.layout);
 
     prevRow = layoutsRow;
   }
-  return layoutsTable;
+  m_attachmentsUsageTable = std::move(layoutsTable);
 }
 
-std::vector<VkSubpassDependency> BuildDependenciesGraph(
-  std::span<const RHI::vulkan::BarrierInfo> attachmentsUsageInfo, size_t attachmentsCount,
-  std::span<const VkSubpassDescription> descriptions, std::span<uint32_t> selfDependencies)
+void SubpassGraph::BuildDependencyGraph(std::span<SubpassIndex> selfDependencies)
 {
-  size_t subpassesCount = descriptions.size();
+  size_t subpassesCount = m_subpassDescriptions.size();
   std::vector<VkSubpassDependency> dependencies;
   dependencies.reserve(subpassesCount + selfDependencies.size());
 
-  std::span<const RHI::vulkan::BarrierInfo> prevRow(attachmentsUsageInfo.begin(), attachmentsCount);
+  std::span<const RHI::vulkan::BarrierInfo> prevRow =
+    GetBarriersRow(SubpassIndex::initialRenderPass);
   for (size_t i = 0; i < subpassesCount; ++i)
   {
-    std::span<const RHI::vulkan::BarrierInfo> row(attachmentsUsageInfo.begin() +
-                                                    (i + 1) * attachmentsCount,
-                                                  attachmentsCount);
+    std::span<const RHI::vulkan::BarrierInfo> row = GetBarriersRow(static_cast<SubpassIndex>(i));
     auto depInfo = dependencies.emplace_back();
     depInfo.srcSubpass = i == 0 ? VK_SUBPASS_EXTERNAL : i - 1;
     depInfo.dstSubpass = i;
@@ -174,6 +273,7 @@ std::vector<VkSubpassDependency> BuildDependenciesGraph(
     }
     else
     {
+      //TODO: find last used attachment and extrace masks from them.
       depInfo.srcStageMask = dependencies[i - 1].dstStageMask;
       depInfo.srcAccessMask = dependencies[i - 1].dstAccessMask;
     }
@@ -185,19 +285,13 @@ std::vector<VkSubpassDependency> BuildDependenciesGraph(
     prevRow = row;
   }
 
-  for (uint32_t i : selfDependencies)
+  for (SubpassIndex idx : selfDependencies)
   {
-    auto && description = descriptions[i];
-    std::span<const VkAttachmentReference> colorAttachments(description.pColorAttachments,
-                                                            description.colorAttachmentCount);
-    std::span<const VkAttachmentReference>
-      depthStencilAttachments(description.pDepthStencilAttachment,
-                              description.pDepthStencilAttachment ? 1 : 0);
-    std::span<const VkAttachmentReference> inputAttachments(description.pInputAttachments,
-                                                            description.inputAttachmentCount);
+    auto && description = m_subpassDescriptions[static_cast<uint32_t>(idx)];
+    auto [colorAttachments, dsAttachments, inputAttachments] =
+      ExtractSubpassAttachments(description);
     VkSubpassDependency selfDependency{};
-    selfDependency.srcSubpass = i;
-    selfDependency.dstSubpass = i;
+    selfDependency.srcSubpass = selfDependency.dstSubpass = static_cast<uint32_t>(idx);
     selfDependency.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
     // Handle color attachments: writes happen at COLOR_ATTACHMENT_OUTPUT,
     // reads (if any) also happen at COLOR_ATTACHMENT_OUTPUT
@@ -212,7 +306,7 @@ std::vector<VkSubpassDependency> BuildDependenciesGraph(
 
     // Handle depth/stencil attachments: writes and reads happen at
     // EARLY_FRAGMENT_TESTS and LATE_FRAGMENT_TESTS
-    if (!depthStencilAttachments.empty())
+    if (!dsAttachments.empty())
     {
       selfDependency.srcStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
                                      VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
@@ -236,7 +330,7 @@ std::vector<VkSubpassDependency> BuildDependenciesGraph(
       // If there are no color or depth attachments, we still need a source
       // for the dependency. Use the same fragment shader stage as source
       // with no specific access (just execution dependency).
-      if (colorAttachments.empty() && depthStencilAttachments.empty())
+      if (colorAttachments.empty() && dsAttachments.empty())
       {
         selfDependency.srcStageMask |= VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
         // No srcAccessMask needed for pure execution dependency
@@ -246,77 +340,8 @@ std::vector<VkSubpassDependency> BuildDependenciesGraph(
            IsFramebufferSpaceStage(selfDependency.dstStageMask));
     dependencies.push_back(selfDependency);
   }
-  return dependencies;
+
+  m_dependenciesGraph = std::move(dependencies);
 }
 
-} // namespace
-
-namespace RHI::vulkan::utils
-{
-
-bool RenderPassBuilder::SetAttachments(std::span<const VkAttachmentDescription> attachments)
-{
-  if (!std::ranges::equal(m_attachments, attachments))
-  {
-    m_attachments.assign(attachments.begin(), attachments.end());
-    m_attachmentsUsageTable.clear();
-    return true;
-  }
-  return false;
-}
-
-void RenderPassBuilder::SetSubpasses(std::vector<VkSubpassDescription> && subpasses,
-                                     std::vector<uint32_t> && selfDependencies)
-{
-  m_subpassDescriptions = std::move(subpasses);
-  m_attachmentsUsageTable = BuildAttachmentUsageTable(m_subpassDescriptions, m_attachments);
-  m_dependenciesGraph = BuildDependenciesGraph(m_attachmentsUsageTable, m_attachments.size(),
-                                               m_subpassDescriptions, selfDependencies);
-}
-
-VkRenderPass RenderPassBuilder::Make(const VkDevice & device) const
-{
-  if (m_subpassDescriptions.empty() || m_attachments.empty())
-    return VK_NULL_HANDLE;
-
-  VkRenderPass renderPass = VK_NULL_HANDLE;
-  VkRenderPassCreateInfo renderPassCreateInfo{};
-  renderPassCreateInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-  renderPassCreateInfo.attachmentCount = static_cast<uint32_t>(m_attachments.size());
-  renderPassCreateInfo.pAttachments = m_attachments.data();
-  renderPassCreateInfo.subpassCount = static_cast<uint32_t>(m_subpassDescriptions.size());
-  renderPassCreateInfo.pSubpasses = m_subpassDescriptions.data();
-  renderPassCreateInfo.dependencyCount = static_cast<uint32_t>(m_dependenciesGraph.size());
-  renderPassCreateInfo.pDependencies = m_dependenciesGraph.data();
-
-  if (auto res = vkCreateRenderPass(device, &renderPassCreateInfo, nullptr, &renderPass);
-      res != VK_SUCCESS)
-    throw std::runtime_error("Failed to create render pass");
-
-  return renderPass;
-}
-
-void RenderPassBuilder::Reset()
-{
-  m_attachments.clear();
-  m_subpassDescriptions.clear();
-  m_dependenciesGraph.clear();
-  m_attachmentsUsageTable.clear();
-}
-
-BarrierInfo RenderPassBuilder::GetFinalLayoutForAttachment(uint32_t subpassIndex,
-                                                           uint32_t attachmentIndex) const
-{
-    subpassIndex++;
-  if (subpassIndex >= 0 && subpassIndex < m_subpassDescriptions.size() && attachmentIndex >= 0 &&
-      attachmentIndex < m_attachments.size())
-    return m_attachmentsUsageTable[subpassIndex * m_attachments.size() + attachmentIndex];
-  else
-    return BarrierInfo{VK_PIPELINE_STAGE_2_NONE, VK_ACCESS_2_NONE, VK_IMAGE_LAYOUT_UNDEFINED};
-}
-
-std::span<const VkAttachmentDescription> RenderPassBuilder::GetCachedAttachments() const noexcept
-{
-  return m_attachments;
-}
-} // namespace RHI::vulkan::utils
+} // namespace RHI::vulkan

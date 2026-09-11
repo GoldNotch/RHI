@@ -103,9 +103,9 @@ void Framebuffer::Invalidate()
   }
 }
 
-void Framebuffer::ForEachAttachment(AttachmentProcessFunc && func)
+std::span<IInternalAttachment *> Framebuffer::GetAttachments() noexcept
 {
-  std::for_each(m_attachments.begin(), m_attachments.end(), func);
+  return m_attachments;
 }
 
 IInternalAttachment * Framebuffer::GetAttachment(uint32_t idx) const

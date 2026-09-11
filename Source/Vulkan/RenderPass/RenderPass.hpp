@@ -1,9 +1,5 @@
 #pragma once
 
-#include <condition_variable>
-#include <list>
-#include <shared_mutex>
-
 #include <CommandsExecution/CommandBuffer.hpp>
 #include <Memory/ResourceUser.hpp>
 #include <Private/OwnedBy.hpp>
@@ -17,10 +13,7 @@ struct RenderTarget;
 struct Framebuffer;
 struct Pipeline;
 struct PipelineProcess;
-namespace utils
-{
-struct RenderPassBuilder;
-}
+struct SubpassGraph;
 } // namespace RHI::vulkan
 
 namespace RHI::vulkan
@@ -58,7 +51,7 @@ public: // IResourceUser
 
 private:
   const RenderTarget * m_activeRenderTarget = nullptr;
-  std::unique_ptr<utils::RenderPassBuilder> m_builder = nullptr;
+  std::unique_ptr<SubpassGraph> m_subpassGraph = nullptr;
   /// There is a lot of thread-readers, so it's must be synchronized access
   VkRenderPass m_renderPass = VK_NULL_HANDLE;
   bool m_invalidRenderPass = false;

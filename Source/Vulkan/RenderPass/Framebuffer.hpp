@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bitset>
+#include <span>
 #include <vector>
 
 #include <Attachments/Attachment.hpp>
@@ -50,8 +51,8 @@ public: // RHI-only API
   /// finish rendering
   void EndFrame(VkSemaphore renderPassSemaphore);
 
-  using AttachmentProcessFunc = std::function<void(IInternalAttachment *)>;
-  void ForEachAttachment(AttachmentProcessFunc && func);
+  //TODO: shared_ptr
+  std::span<IInternalAttachment *> GetAttachments() noexcept;
   IInternalAttachment * GetAttachment(uint32_t idx) const;
   RHI::SamplesCount CalcSamplesCount() const noexcept;
 

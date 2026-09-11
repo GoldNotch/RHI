@@ -31,6 +31,8 @@ PRIVATE
 	"RenderPass/RenderPass.hpp"
 	"RenderPass/RenderTarget.cpp"
 	"RenderPass/RenderTarget.hpp"
+	"RenderPass/SubpassGraph.cpp"
+	"RenderPass/SubpassGraph.hpp"
 
 	"Pipeline/DescriptorBufferLayout.cpp"
 	"Pipeline/DescriptorBufferLayout.hpp"
@@ -63,8 +65,6 @@ PRIVATE
 	"Utils/PipelineBuilder.hpp"
 	"Utils/PipelineLayoutBuilder.cpp"
 	"Utils/PipelineLayoutBuilder.hpp"
-	"Utils/RenderPassBuilder.cpp"
-	"Utils/RenderPassBuilder.hpp"
 	"Utils/SamplerBuilder.cpp"
 	"Utils/SamplerBuilder.hpp"
 	"Utils/FenceBuilder.hpp"
