@@ -9,19 +9,19 @@ VkDescriptorSetLayout DescriptorSetLayoutBuilder::Make(const VkDevice & device) 
   // create descriptor set layout
   VkDescriptorSetLayoutCreateInfo dsetLayoutInfo{};
   dsetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-  dsetLayoutInfo.bindingCount = static_cast<uint32_t>(m_uniformDescriptions.size());
-  dsetLayoutInfo.pBindings = m_uniformDescriptions.data();
+  dsetLayoutInfo.bindingCount = static_cast<uint32_t>(m_bindings.size());
+  dsetLayoutInfo.pBindings = m_bindings.data();
 
-  VkDescriptorSetLayout descr_layout;
+  VkDescriptorSetLayout descr_layout = VK_NULL_HANDLE;
   if (auto res = vkCreateDescriptorSetLayout(device, &dsetLayoutInfo, nullptr, &descr_layout);
       res != VK_SUCCESS)
     throw std::runtime_error("Failed to create descriptor set layout");
-  return VkDescriptorSetLayout(descr_layout);
+  return descr_layout;
 }
 
 void DescriptorSetLayoutBuilder::Reset()
 {
-  m_uniformDescriptions.clear();
+  m_bindings.clear();
 }
 
 void DescriptorSetLayoutBuilder::DeclareDescriptor(uint32_t binding, VkDescriptorType type,
@@ -33,9 +33,9 @@ void DescriptorSetLayoutBuilder::DeclareDescriptor(uint32_t binding, VkDescripto
 void DescriptorSetLayoutBuilder::DeclareDescriptorsArray(uint32_t binding, VkDescriptorType type,
                                                          ShaderType shaderStage, uint32_t size)
 {
-  if (binding != m_uniformDescriptions.size())
+  if (binding != m_bindings.size())
     throw std::runtime_error("Uniforms must be declared in order of ascending binding index");
-  auto && uniformBinding = m_uniformDescriptions.emplace_back();
+  auto && uniformBinding = m_bindings.emplace_back();
   uniformBinding.binding = binding;
   uniformBinding.descriptorType = type;
   uniformBinding.descriptorCount = size;

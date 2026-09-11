@@ -26,7 +26,8 @@ struct CommandBuffer : public OwnedBy<Context>
                     VkFramebuffer framebuffer = VK_NULL_HANDLE) const;
   void EndWriting() const;
   virtual void Reset();
-  void AddCommands(const std::vector<VkCommandBuffer> & buffers);
+  void AddCommands(std::span<const VkCommandBuffer> buffers);
+  void AddCommands(VkCommandBuffer buffer);
 
   template<typename VkCmdFunc, typename... Args>
   void PushCommand(VkCmdFunc && func, Args &&... args) noexcept
@@ -36,15 +37,26 @@ struct CommandBuffer : public OwnedBy<Context>
   }
 
   bool IsEmpty() const noexcept { return m_commandsCount == 0; }
+  uint32_t GetBoundQueueFamily() const noexcept;
 
 public:
   VkCommandBuffer GetHandle() const noexcept { return m_buffer; }
 
 private:
   VkCommandBufferLevel m_level;
+  uint32_t m_queueFamily = 0;
   VkCommandPool m_pool = VK_NULL_HANDLE;
   VkCommandBuffer m_buffer = VK_NULL_HANDLE;
   size_t m_commandsCount = 0;
 };
 
 } // namespace RHI::vulkan::details
+
+namespace RHI::vulkan
+{
+struct ICommandWriter
+{
+  virtual ~ICommandWriter() = default;
+  virtual void RecordCommands(details::CommandBuffer & commands) = 0;
+};
+} // namespace RHI::vulkan

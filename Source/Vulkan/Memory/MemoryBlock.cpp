@@ -73,7 +73,7 @@ MemoryBlock::MemoryBlock(MemoryAllocator & allocator, const TextureDescription &
                        :*/
       VK_IMAGE_TILING_OPTIMAL;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imageInfo.usage = usage;
+    imageInfo.usage = usage == 0 ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT : usage;
     imageInfo.samples = samples;
     imageInfo.sharingMode = shareMode;
   }

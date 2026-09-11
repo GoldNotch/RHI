@@ -11,6 +11,8 @@
 #include <stb_image.h>
 // clang-format on
 
+#include <rectpack2D/finders_interface.h>
+
 
 void ConsoleLog(RHI::LogMessageStatus status, const std::string & message)
 {
@@ -115,6 +117,84 @@ RHI::ITexture * UploadLayeredTexture(RHI::IContext * ctx,
       args.dstOffset = {0, 0, static_cast<RHI::texel_t>(i)};
     }
     texture->UploadImage(args);
+  }
+
+  if (useMips)
+    texture->GenerateMipmaps();
+
+  for (auto && hostTexture : textures)
+    stbi_image_free(hostTexture.pixelData);
+  textures.clear();
+  return texture;
+}
+
+RHI::ITexture * BuildAtlasTexture(RHI::IContext * ctx, uint16_t atlasSize,
+                                  const std::vector<std::filesystem::path> & paths, bool with_alpha,
+                                  bool useMips)
+{
+  using namespace rectpack2D;
+  using spaces_type = rectpack2D::empty_spaces<false, default_empty_spaces>;
+  using rect_t = output_rect_t<spaces_type>;
+  auto report_successful = [](rect_t &)
+  {
+    return callback_result::CONTINUE_PACKING;
+  };
+  auto report_unsuccessful = [](rect_t &)
+  {
+    return callback_result::ABORT_PACKING;
+  };
+
+
+  int width = 0, height = 0;
+  std::vector<RHI::HostTextureView> textures;
+  std::vector<rect_t> rects;
+  for (auto && path : paths)
+  {
+    int w = 0, h = 0, channels = 3;
+    uint8_t * pixel_data =
+      stbi_load(path.string().c_str(), &w, &h, &channels, with_alpha ? STBI_rgb_alpha : STBI_rgb);
+    if (!pixel_data)
+      throw std::runtime_error("Failed to load texture. Check it exists near the exe file");
+
+    auto && hostTexture = textures.emplace_back();
+    hostTexture.pixelData = pixel_data;
+    hostTexture.extent = {static_cast<RHI::texel_t>(w), static_cast<RHI::texel_t>(h), 1};
+    hostTexture.type = RHI::ImageType::Image2D;
+    hostTexture.format = with_alpha ? RHI::HostImageFormat::RGBA8 : RHI::HostImageFormat::RGB8;
+
+    rects.push_back(rect_xywh(0, 0, w, h));
+  }
+
+  RHI::TextureDescription imageArgs{};
+  {
+    imageArgs.extent = {atlasSize, atlasSize, 1};
+    imageArgs.type = RHI::ImageType::Image2D;
+    imageArgs.format = with_alpha ? RHI::ImageFormat::RGBA8 : RHI::ImageFormat::RGB8;
+    imageArgs.mipLevels = useMips ? RHI::CalcMaxMipLevels(imageArgs.extent) : 1;
+  }
+  auto texture = ctx->CreateTexture(imageArgs);
+
+  const auto result_size =
+    find_best_packing<spaces_type>(rects, make_finder_input(atlasSize, -4 /*discard_step */,
+                                                            report_successful, report_unsuccessful,
+                                                            flipping_option::DISABLED));
+
+  std::vector<RHI::TextureRegion> mipRegions;
+  mipRegions.resize(textures.size());
+  for (size_t i = 0; i < textures.size(); ++i)
+  {
+    auto && hostTexture = textures[i];
+    RHI::UploadImageArgs args{};
+    {
+      args.srcTexture = hostTexture;
+      args.copyRegion = {{0, 0, 0}, {hostTexture.extent}};
+      args.dstOffset = {static_cast<uint16_t>(rects[i].x), static_cast<uint16_t>(rects[i].y), 0};
+    }
+    texture->UploadImage(args);
+    mipRegions[i].offset = {static_cast<uint16_t>(rects[i].x), static_cast<uint16_t>(rects[i].y),
+                            0};
+    mipRegions[i].extent = {static_cast<uint16_t>(rects[i].w), static_cast<uint16_t>(rects[i].h),
+                            1};
   }
 
   if (useMips)

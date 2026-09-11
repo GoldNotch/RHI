@@ -26,7 +26,6 @@ RenderTarget::RenderTarget(RenderTarget && rhs) noexcept
   std::swap(m_boundRenderPass, rhs.m_boundRenderPass);
   std::swap(m_attachedImages, rhs.m_attachedImages);
   std::swap(m_extent, rhs.m_extent);
-  std::swap(m_clearValues, rhs.m_clearValues);
   std::swap(m_framebuffer, rhs.m_framebuffer);
   std::swap(m_builder, rhs.m_builder);
   std::swap(m_invalidFramebuffer, rhs.m_invalidFramebuffer);
@@ -40,29 +39,11 @@ RenderTarget & RenderTarget::operator=(RenderTarget && rhs) noexcept
     std::swap(m_boundRenderPass, rhs.m_boundRenderPass);
     std::swap(m_attachedImages, rhs.m_attachedImages);
     std::swap(m_extent, rhs.m_extent);
-    std::swap(m_clearValues, rhs.m_clearValues);
     std::swap(m_framebuffer, rhs.m_framebuffer);
     std::swap(m_builder, rhs.m_builder);
     std::swap(m_invalidFramebuffer, rhs.m_invalidFramebuffer);
   }
   return *this;
-}
-
-void RenderTarget::SetClearValue(uint32_t attachmentIndex, float r, float g, float b,
-                                 float a) noexcept
-{
-  m_clearValues[attachmentIndex].color = VkClearColorValue{r, g, b, a};
-}
-
-void RenderTarget::SetClearValue(uint32_t attachmentIndex, float depth, uint32_t stencil) noexcept
-{
-  m_clearValues[attachmentIndex].depthStencil = VkClearDepthStencilValue{depth, stencil};
-}
-
-TexelIndex RenderTarget::GetExtent() const noexcept
-{
-  return {static_cast<texel_t>(m_extent.width), static_cast<texel_t>(m_extent.height),
-          static_cast<texel_t>(m_extent.depth) /*= 1*/};
 }
 
 void RenderTarget::Invalidate()
@@ -98,19 +79,30 @@ void RenderTarget::SetExtent(const VkExtent3D & extent) noexcept
   m_extent = extent;
 }
 
-const std::vector<VkClearValue> & RenderTarget::GetClearValues() const & noexcept
+std::span<const VkClearValue> RenderTarget::GetClearValues() const noexcept
 {
   return m_clearValues;
 }
 
-void RenderTarget::SetAttachments(std::vector<VkImageView> && views) noexcept
+std::span<const VkImageView> RenderTarget::GetImageViews() const noexcept
+{
+  return m_attachedImages;
+}
+
+std::span<const VkSemaphore> RenderTarget::GetImageAvailableForRenderSemaphores() const noexcept
+{
+  return m_imageAvailabilitySemaphores;
+}
+
+void RenderTarget::SetAttachments(std::vector<VkImageView> && views,
+                                  std::vector<VkClearValue> && clearValues,
+                                  std::vector<VkSemaphore> && imageSemaphores) noexcept
 {
   if (views != m_attachedImages)
-  {
-    m_attachedImages = std::move(views);
-    m_clearValues.resize(m_attachedImages.size(), VkClearValue{});
     m_invalidFramebuffer = true;
-  }
+  m_attachedImages = std::move(views);
+  m_clearValues = std::move(clearValues);
+  m_imageAvailabilitySemaphores = std::move(imageSemaphores);
 }
 
 size_t RenderTarget::GetAttachmentsCount() const noexcept

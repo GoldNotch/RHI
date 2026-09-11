@@ -15,6 +15,6 @@ struct DescriptorSetLayoutBuilder final
                                uint32_t size);
 
 private:
-  std::vector<VkDescriptorSetLayoutBinding> m_uniformDescriptions;
+  std::vector<VkDescriptorSetLayoutBinding> m_bindings;
 };
 } // namespace RHI::vulkan::utils

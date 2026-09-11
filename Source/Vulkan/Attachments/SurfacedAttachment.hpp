@@ -3,8 +3,7 @@
 #include <vector>
 
 #include <Attachments/GenericAttachment.hpp>
-#include <CommandsExecution/AsyncTask.hpp>
-#include <ImageUtils/ImageLayoutTransferer.hpp>
+#include <Memory/Synchronizer.hpp>
 #include <Surface.hpp>
 
 namespace vkb
@@ -25,15 +24,14 @@ struct SurfacedAttachment : public IAttachment,
   MAKE_ALIAS_FOR_GET_OWNER(Context, GetContext);
 
 public: // ITexture interface
-  virtual std::future<DownloadResult> DownloadImage(HostImageFormat format,
-                                                    const TextureRegion & region) override;
+  virtual std::shared_ptr<IAwaitable> DownloadImage(const DownloadImageArgs & args) override;
   virtual TextureDescription GetDescription() const noexcept override;
   virtual size_t Size() const override;
+  virtual void SetClearValue(float r, float g, float b, float a) override;
+  virtual void SetClearValue(float depth, uint32_t stencil) override;
 
 public: //IInternalTexture interface
   virtual VkImageView GetImageView() const noexcept override;
-  virtual void TransferLayout(details::CommandBuffer & commandBuffer,
-                              VkImageLayout layout) override;
   virtual VkImageLayout GetLayout() const noexcept override;
   virtual VkImage GetHandle() const noexcept override;
   virtual VkFormat GetInternalFormat() const noexcept override;
@@ -48,13 +46,13 @@ public: // IAttachment interface
 
 public: // IInternalAttachment interface
   virtual std::pair<VkImageView, VkSemaphore> AcquireForRendering() override;
-  virtual void Invalidate() override;
+  virtual void Invalidate(VkImageUsageFlags usage) override;
   virtual bool FinalRendering(VkSemaphore waitSemaphore) override;
   virtual uint32_t GetBuffering() const noexcept override;
   virtual RHI::SamplesCount GetSamplesCount() const noexcept override;
   virtual VkAttachmentDescription BuildDescription() const noexcept override;
-  virtual void TransferLayout(VkImageLayout layout) noexcept override;
   virtual void Resize(const VkExtent2D & new_extent) noexcept;
+  virtual details::Synchronizer & GetSynchronizer() & noexcept override;
 
 protected:
   void DestroySwapchain() noexcept;
@@ -72,7 +70,7 @@ private:
   std::vector<VkImage> m_images;                          ///< swapchain images
   std::vector<VkImageView> m_imageViews;                  /// attachment image view
   std::vector<VkSemaphore> m_imageAvailabilitySemaphores; /// owns
-  std::vector<ImageLayoutTransferer> m_layouts;
+  std::vector<details::Synchronizer> m_synchronizers;
   uint32_t m_activeSemaphore = 0;               ///<
   uint32_t m_activeImage = g_InvalidImageIndex; ///< image index in rendering
 

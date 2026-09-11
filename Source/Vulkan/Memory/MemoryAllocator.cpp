@@ -20,7 +20,7 @@ MemoryAllocator::MemoryAllocator(Context & ctx)
   allocator_info.physicalDevice = ctx.GetGpuConnection().GetGPU();
   allocator_info.device = ctx.GetGpuConnection().GetDevice();
 
-  //IS you set newer version (1.1 or 1.3) it crashes 
+  //If you set newer version (1.1 or 1.3) it crashes 
   // in m_VulkanFunctions.vkGetImageMemoryRequirements2KHR
   // it seems Vma could't load some function from vulkan-1.dll
   // or my VkInstance initialization is wrong

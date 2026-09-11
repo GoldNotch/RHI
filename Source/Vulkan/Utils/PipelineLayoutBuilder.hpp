@@ -1,4 +1,5 @@
 #pragma once
+#include <optional>
 #include <vector>
 
 #include <RHI.hpp>
@@ -8,11 +9,13 @@ namespace RHI::vulkan::utils
 {
 struct PipelineLayoutBuilder final
 {
-  VkPipelineLayout Make(const VkDevice & device, const VkDescriptorSetLayout * layouts,
-                        uint32_t layoutSize, const VkPushConstantRange * pushConstantRange) const;
-  void Reset() { m_layouts.clear(); }
+  VkPipelineLayout Make(const VkDevice & device,
+                        std::span<const VkDescriptorSetLayout> layouts) const;
+  void Reset();
+
+  void DeclarePushConstant(uint32_t size, ShaderType shaderStage);
 
 private:
-  std::vector<VkDescriptorSetLayout> m_layouts;
+  std::optional<VkPushConstantRange> m_pushConstantRange = std::nullopt;
 };
 } // namespace RHI::vulkan::utils

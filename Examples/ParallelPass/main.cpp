@@ -1,9 +1,11 @@
+#include <cassert>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <future>
+#include <span>
 
 #include <RHI.hpp>
 #include <TestUtils.hpp>
@@ -26,25 +28,40 @@ struct Renderer
   explicit Renderer(RHI::IContext & ctx, RHI::IFramebuffer & framebuffer);
   ~Renderer();
   // draw scene in parallel
-  void AsyncDrawScene();
-
-  void UpdateGeometry();
+  void UpdateGeometry(std::span<float> newVertices);
 
 private:
-  RHI::IFramebuffer * m_fbo;
+  RHI::IContext * m_context = nullptr;
+  RHI::IFramebuffer * m_fbo = nullptr;
   /// subpass which can be executed in parallel
-  RHI::ISubpass * m_subpass;
+  RHI::PipelinePtr m_pipeline = nullptr;
 
   /// some data for frame
-  RHI::IBufferGPU * m_vertexBuffer;
-  RHI::IBufferGPU * m_indexBuffer;
-
-  /// current draw task
-  std::future<bool> m_drawTask;
-
-private:
-  bool DrawSceneImpl();
+  RHI::IBufferGPU * m_vertexBuffer = nullptr;
+  RHI::IBufferGPU * m_indexBuffer = nullptr;
 };
+
+std::atomic_bool m_running = true;
+void thread_main(Renderer * renderer)
+{
+  float t = 0.0;
+  while (m_running)
+  {
+    auto c = std::cosf(t);
+    // clang-format off
+    std::array<float, 15> newVertices{  
+      // pos + colors(rgb)
+      0.5f,  0.5f,  c*c, 0.0f, 0.0f, /*first vertex*/
+      -0.5f, c*c,  0.0f, 1.0f, 0.0f, /*second vertex*/
+      c, -0.5f, 0.0f, 0.0f, 1.0f  /*third vertex*/
+    };
+    // clang-format on
+
+    renderer->UpdateGeometry(newVertices);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    t += 0.01;
+  }
+}
 
 int main()
 {
@@ -56,101 +73,78 @@ int main()
   std::unique_ptr<RHI::IContext> ctx = RHI::CreateContext(gpuTraits, ConsoleLog);
 
   RHI::IFramebuffer * framebuffer = ctx->CreateFramebuffer();
-  framebuffer->AddAttachment(0, ctx->CreateSurfacedAttachment(window.GetDrawSurface(),
-                                                              RHI::RenderBuffering::Triple));
+  RHI::IAttachment * colorAttachment =
+    ctx->CreateSurfacedAttachment(window.GetDrawSurface(), RHI::RenderBuffering::Triple);
+  framebuffer->AddAttachment(0, colorAttachment);
 
   Renderer triangleRenderer(*ctx, *framebuffer);
-  triangleRenderer.AsyncDrawScene();
 
   window.onResize = [&triangleRenderer, &framebuffer](int width, int height)
   {
     framebuffer->Resize(width, height);
-    triangleRenderer.AsyncDrawScene();
   };
+  std::thread newThread(thread_main, &triangleRenderer);
 
+  colorAttachment->SetClearValue(0.1f, 1.0f, 0.4f, 1.0f);
   window.MainLoop(
     [framebuffer, &ctx, &triangleRenderer](float delta)
     {
-      triangleRenderer.UpdateGeometry();
+      ctx->ClearResources();
       ctx->TransferPass();
-      if (auto * renderTarget = framebuffer->BeginFrame())
-      {
-        renderTarget->SetClearValue(0, 0.1f, 1.0f, 0.4f, 1.0f);
-        framebuffer->EndFrame();
-      }
+      ctx->RenderPass(framebuffer);
     });
+
+  m_running = false;
+  newThread.join();
 
   return 0;
 }
 
 Renderer::Renderer(RHI::IContext & ctx, RHI::IFramebuffer & framebuffer)
-  : m_fbo(&framebuffer)
+  : m_context(&ctx)
+  , m_fbo(&framebuffer)
 {
   // create pipeline for triangle. Here we can configure gpu pipeline for rendering
-  m_subpass = framebuffer.CreateSubpass();
-  auto && trianglePipeline = m_subpass->GetConfiguration();
-  trianglePipeline.BindAttachment(0, RHI::ShaderAttachmentSlot::Color);
+  m_pipeline = ctx.CreatePipeline();
+  m_pipeline->BindAttachment(0, RHI::ShaderAttachmentSlot::Color);
   // set shaders
-  trianglePipeline.AttachShader(RHI::ShaderType::Vertex, ReadSpirV(FromGLSL("triangle.vert")));
-  trianglePipeline.AttachShader(RHI::ShaderType::Fragment, ReadSpirV(FromGLSL("triangle.frag")));
+  m_pipeline->AttachShader(RHI::ShaderType::Vertex, ReadSpirV(FromGLSL("triangle.vert")));
+  m_pipeline->AttachShader(RHI::ShaderType::Fragment, ReadSpirV(FromGLSL("triangle.frag")));
   // set vertex attributes (5 float attributes per vertex - pos.xy and color.rgb)
-  trianglePipeline.AddInputBinding(0, 5 * sizeof(float), RHI::InputBindingType::VertexData);
-  trianglePipeline.AddInputAttribute(0, 0, 0, 2, RHI::InputAttributeElementType::FLOAT);
-  trianglePipeline.AddInputAttribute(0, 1, 2 * sizeof(float), 3,
-                                     RHI::InputAttributeElementType::FLOAT);
+  m_pipeline->AddInputBinding(0, 5 * sizeof(float), RHI::InputBindingType::VertexData);
+  m_pipeline->AddInputAttribute(0, 0, 0, 2, RHI::InputAttributeElementType::FLOAT);
+  m_pipeline->AddInputAttribute(0, 1, 2 * sizeof(float), 3, RHI::InputAttributeElementType::FLOAT);
 
   // create vertex buffer
   m_vertexBuffer =
     ctx.CreateBuffer(VerticesCount * 5 * sizeof(float), RHI::BufferGPUUsage::VertexBuffer, false);
-  m_vertexBuffer->UploadAsync(Vertices, VerticesCount * 5 * sizeof(float));
+  //m_vertexBuffer->UploadAsync(Vertices, VerticesCount * 5 * sizeof(float));
 
 
   // create index buffer
   m_indexBuffer =
     ctx.CreateBuffer(IndicesCount * sizeof(uint32_t), RHI::BufferGPUUsage::IndexBuffer, false);
   m_indexBuffer->UploadAsync(Indices, IndicesCount * sizeof(uint32_t));
+
+  auto process = ctx.CreateProcess();
+  {
+    auto extent = m_fbo->GetExtent();
+    process->SetViewport(static_cast<float>(extent[0]), static_cast<float>(extent[1]));
+    process->SetScissor(0, 0, static_cast<uint32_t>(extent[0]), static_cast<uint32_t>(extent[1]));
+    process->BindVertexBuffer(0, m_vertexBuffer, 0);
+    process->BindIndexBuffer(m_indexBuffer, RHI::IndexType::UINT32);
+    process->DrawIndexedVertices(IndicesCount, 1);
+  }
+  m_fbo->SetSubpass(0, m_pipeline, process);
 }
 
 Renderer::~Renderer()
 {
-  //TODO: destroy buffers
+  m_context->DeleteBuffer(m_vertexBuffer);
+  m_context->DeleteBuffer(m_indexBuffer);
 }
 
-void Renderer::AsyncDrawScene()
+void Renderer::UpdateGeometry(std::span<float> newVertices)
 {
-  if (m_drawTask.valid())
-  {
-    // wait for previous task
-    auto result = m_drawTask.wait_for(std::chrono::milliseconds(10));
-    if (result == std::future_status::timeout)
-      return;
-  }
-  auto && future = std::async(&Renderer::DrawSceneImpl, this);
-  m_drawTask = std::move(future);
-}
-
-void Renderer::UpdateGeometry()
-{
-  m_vertexBuffer->UploadAsync(Vertices, VerticesCount * 5 * sizeof(float));
-  m_indexBuffer->UploadAsync(Indices, IndicesCount * sizeof(uint32_t));
-  AsyncDrawScene();
-}
-
-bool Renderer::DrawSceneImpl()
-{
-  if (m_subpass->ShouldBeInvalidated())
-  {
-    auto extent = m_fbo->GetExtent();
-    if (m_subpass->BeginPass())
-    {
-      m_subpass->SetViewport(static_cast<float>(extent[0]), static_cast<float>(extent[1]));
-      m_subpass->SetScissor(0, 0, static_cast<uint32_t>(extent[0]),
-                            static_cast<uint32_t>(extent[1]));
-      m_subpass->BindVertexBuffer(0, *m_vertexBuffer, 0);
-      m_subpass->BindIndexBuffer(*m_indexBuffer, RHI::IndexType::UINT32);
-      m_subpass->DrawIndexedVertices(IndicesCount, 1);
-      m_subpass->EndPass();
-    }
-  }
-  return true;
+  m_vertexBuffer->UploadAsync(newVertices.data(), VerticesCount * 5 * sizeof(float));
 }

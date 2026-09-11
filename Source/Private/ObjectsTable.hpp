@@ -5,6 +5,8 @@
 #include <variant>
 #include <vector>
 
+#include <Private/FastDynamicCast.hpp>
+
 namespace RHI::utils
 {
 
@@ -33,13 +35,13 @@ struct ObjectsTable final
 
       obj->SetIndex(idx);
       auto && newObj = m_data[idx].template emplace<InterfaceUPtr>(std::move(obj));
-      return dynamic_cast<ObjectT *>(newObj.get());
+      return FastDynamicCast<ObjectT>(newObj.get());
     }
     else
     {
       // Append new slot
       auto && newObj = m_data.emplace_back(std::move(obj));
-      return dynamic_cast<ObjectT *>(std::get<InterfaceUPtr>(newObj).get());
+      return FastDynamicCast<ObjectT>(std::get<InterfaceUPtr>(newObj).get());
     }
   }
 

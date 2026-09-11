@@ -34,28 +34,28 @@ int main()
   auto image_it = textures.begin();
 
   RHI::IFramebuffer * framebuffer = ctx->CreateFramebuffer();
-  framebuffer->AddAttachment(0, ctx->CreateSurfacedAttachment(window.GetDrawSurface(),
-                                                              RHI::RenderBuffering::Triple));
+  auto * colorAttachment =
+    ctx->CreateSurfacedAttachment(window.GetDrawSurface(), RHI::RenderBuffering::Triple);
+  framebuffer->AddAttachment(0, colorAttachment);
 
   window.onResize = [framebuffer](int width, int height)
   {
     framebuffer->Resize(width, height);
   };
 
-  auto * subpass = framebuffer->CreateSubpass();
   // create pipeline for triangle. Here we can configure gpu pipeline for rendering
-  auto && trianglePipeline = subpass->GetConfiguration();
-  trianglePipeline.BindAttachment(0, RHI::ShaderAttachmentSlot::Color);
-  trianglePipeline.AttachShader(RHI::ShaderType::Vertex, ReadSpirV(FromGLSL("textures.vert")));
-  trianglePipeline.AttachShader(RHI::ShaderType::Fragment, ReadSpirV(FromGLSL("textures.frag")));
-  trianglePipeline.DefinePushConstant(sizeof(PushConstant),
-                                      RHI::ShaderType::Fragment | RHI::ShaderType::Vertex);
+  auto trianglePipeline = ctx->CreatePipeline();
+  trianglePipeline->BindAttachment(0, RHI::ShaderAttachmentSlot::Color);
+  trianglePipeline->AttachShader(RHI::ShaderType::Vertex, ReadSpirV(FromGLSL("textures.vert")));
+  trianglePipeline->AttachShader(RHI::ShaderType::Fragment, ReadSpirV(FromGLSL("textures.frag")));
+  trianglePipeline->DefinePushConstant(sizeof(PushConstant),
+                                       RHI::ShaderType::Fragment | RHI::ShaderType::Vertex);
 
   std::vector<RHI::ISamplerUniformDescriptor *> samplers;
   auto it = textures.begin();
   for (uint32_t i = 0; i < 8; ++i)
   {
-    auto * texture = trianglePipeline.DeclareSampler({0, i}, RHI::ShaderType::Fragment);
+    auto * texture = trianglePipeline->DeclareSampler({0, i}, RHI::ShaderType::Fragment);
     texture->SetFilter(RHI::TextureFilteration::Linear, RHI::TextureFilteration::Linear);
     texture->AssignImage(*it);
     samplers.push_back(texture);
@@ -64,10 +64,40 @@ int main()
       it = textures.begin();
   }
 
+  auto process = ctx->CreateProcess();
+  {
+    auto [width, height] = window.GetSize();
+    process->SetViewport(static_cast<float>(width), static_cast<float>(height));
+    process->SetScissor(0, 0, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+    constexpr int cells_count_in_row = 8;
+    constexpr float cell_width = 2.0f / cells_count_in_row;
+    constexpr float offset = -1.0f + cell_width / 2.0f;
+    constexpr float margin = 0.05f;
+    PushConstant ct{};
+    ct.scale_x = cell_width / 2.0f;
+    ct.scale_y = cell_width / 2.0f;
+    ct.texture_index = 0;
+    for (int i = 0; i <= cells_count_in_row; ++i)
+    {
+      for (int j = 0; j <= cells_count_in_row; ++j)
+      {
+        ct.pos_x = offset + j * (cell_width + margin);
+        ct.pos_y = offset + i * (cell_width + margin);
+        ct.texture_index = (ct.texture_index + 1) % textures.size();
+        process->PushConstant(&ct, sizeof(PushConstant));
+        process->DrawVertices(6, 1); 
+      }
+    } 
+  }
+  framebuffer->SetSubpass(0, trianglePipeline, process);
+
+  colorAttachment->SetClearValue(0.3f, 0.3f, 0.5f, 1.0f);
   window.MainLoop(
     [&](float delta)
     {
+      ctx->ClearResources();
       ctx->TransferPass();
+      ctx->RenderPass(framebuffer);
 
       // change textures at realtime
       if (window.IsKeyPressed(RHI::test_examples::Keycode::KEY_ENTER))
@@ -83,43 +113,6 @@ int main()
           if (it == textures.end())
             it = textures.begin();
         }
-      }
-
-      if (RHI::IRenderTarget * renderTarget = framebuffer->BeginFrame())
-      {
-        renderTarget->SetClearValue(0, 0.3f, 0.3f, 0.5f, 1.0f);
-
-        if (subpass->ShouldBeInvalidated())
-        {
-          auto [width, height, depth] = renderTarget->GetExtent();
-          if (subpass->BeginPass())
-          {
-            subpass->SetViewport(static_cast<float>(width), static_cast<float>(height));
-            subpass->SetScissor(0, 0, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-            constexpr int cells_count_in_row = 8;
-            constexpr float cell_width = 2.0f / cells_count_in_row;
-            constexpr float offset = -1.0f + cell_width / 2.0f;
-            constexpr float margin = 0.05f;
-            PushConstant ct;
-            ct.scale_x = cell_width / 2.0f;
-            ct.scale_y = cell_width / 2.0f;
-            ct.texture_index = 0;
-            for (int i = 0; i <= cells_count_in_row; ++i)
-            {
-              for (int j = 0; j <= cells_count_in_row; ++j)
-              {
-                ct.pos_x = offset + j * (cell_width + margin);
-                ct.pos_y = offset + i * (cell_width + margin);
-                ct.texture_index = (ct.texture_index + 1) % textures.size();
-                subpass->PushConstant(&ct, sizeof(PushConstant));
-                subpass->DrawVertices(6, 1);
-              }
-            }
-
-            subpass->EndPass();
-          }
-        }
-        framebuffer->EndFrame();
       }
     });
 

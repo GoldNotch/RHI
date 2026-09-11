@@ -11,50 +11,49 @@ CubesRenderer::CubesRenderer(RHI::IContext & ctx)
                                    RHI::BufferGPUUsage::VertexBuffer, false))
 {
   SetCameraTransform(glm::identity<glm::mat4>());
+
+  auto pipeline = ctx.CreatePipeline();
+  {
+      pipeline->BindAttachment(0, RHI::ShaderAttachmentSlot::Color);
+      pipeline->BindAttachment(1, RHI::ShaderAttachmentSlot::DepthStencil);
+      pipeline->BindResolver(2, 0);
+      pipeline->EnableDepthTest(true);
+      // set shaders
+      pipeline->AttachShader(RHI::ShaderType::Vertex, ReadSpirV(FromGLSL("cube.vert")));
+      pipeline->AttachShader(RHI::ShaderType::Geometry, ReadSpirV(FromGLSL("cube.geom")));
+      pipeline->AttachShader(RHI::ShaderType::Fragment, ReadSpirV(FromGLSL("cube.frag")));
+      pipeline->SetMeshTopology(RHI::MeshTopology::Point);
+
+      pipeline->AddInputBinding(0, sizeof(CubeDescription), RHI::InputBindingType::VertexData);
+      pipeline->AddInputAttribute(0, 0, 0, 3, RHI::InputAttributeElementType::FLOAT);
+      pipeline->AddInputAttribute(0, 1, 3 * sizeof(float), 3, RHI::InputAttributeElementType::FLOAT);
+      pipeline->AddInputAttribute(0, 2, 6 * sizeof(float), 3, RHI::InputAttributeElementType::FLOAT);
+      pipeline->AddInputAttribute(0, 3, 9 * sizeof(float), 1, RHI::InputAttributeElementType::SINT);
+
+
+      auto* uniform = pipeline->DeclareUniform({ 0, 0 }, RHI::ShaderType::Vertex);
+      uniform->AssignBuffer(m_uniformBuffer);
+      pipeline->DeclareSamplersArray({ 0, 1 }, RHI::ShaderType::Fragment,
+          static_cast<uint32_t>(m_textures.size()), m_textures.data());
+      for (auto* texture : m_textures)
+          texture->SetFilter(RHI::TextureFilteration::Linear, RHI::TextureFilteration::Linear);
+  }
+  m_renderPass = pipeline;
 }
 
 CubesRenderer::~CubesRenderer()
 {
-  //TODO: Destroy uniform buffer
-  //TODO: destroy cubesBuffer
+  m_context.DeleteBuffer(m_uniformBuffer);
+  m_context.DeleteBuffer(m_cubesBuffer);
   DestroyHandles();
 }
 
 void CubesRenderer::BindDrawSurface(RHI::IFramebuffer * framebuffer)
 {
-  auto newSubpass = framebuffer->CreateSubpass();
-  {
-    auto && subpassConfig = newSubpass->GetConfiguration();
-    subpassConfig.BindAttachment(0, RHI::ShaderAttachmentSlot::Color);
-    subpassConfig.BindAttachment(1, RHI::ShaderAttachmentSlot::DepthStencil);
-    subpassConfig.BindResolver(2, 0);
-    subpassConfig.EnableDepthTest(true);
-    // set shaders
-    subpassConfig.AttachShader(RHI::ShaderType::Vertex, ReadSpirV(FromGLSL("cube.vert")));
-    subpassConfig.AttachShader(RHI::ShaderType::Geometry, ReadSpirV(FromGLSL("cube.geom")));
-    subpassConfig.AttachShader(RHI::ShaderType::Fragment, ReadSpirV(FromGLSL("cube.frag")));
-    subpassConfig.SetMeshTopology(RHI::MeshTopology::Point);
-
-    subpassConfig.AddInputBinding(0, sizeof(CubeDescription), RHI::InputBindingType::VertexData);
-    subpassConfig.AddInputAttribute(0, 0, 0, 3, RHI::InputAttributeElementType::FLOAT);
-    subpassConfig.AddInputAttribute(0, 1, 3 * sizeof(float), 3,
-                                    RHI::InputAttributeElementType::FLOAT);
-    subpassConfig.AddInputAttribute(0, 2, 6 * sizeof(float), 3,
-                                    RHI::InputAttributeElementType::FLOAT);
-    subpassConfig.AddInputAttribute(0, 3, 9 * sizeof(float), 1,
-                                    RHI::InputAttributeElementType::SINT);
-
-
-    auto * uniform = subpassConfig.DeclareUniform({0, 0}, RHI::ShaderType::Vertex);
-    uniform->AssignBuffer(*m_uniformBuffer);
-    subpassConfig.DeclareSamplersArray({0, 1}, RHI::ShaderType::Fragment,
-                                       static_cast<uint32_t>(m_textures.size()), m_textures.data());
-    for (auto * texture : m_textures)
-      texture->SetFilter(RHI::TextureFilteration::Linear, RHI::TextureFilteration::Linear);
-  }
   DestroyHandles();
-  m_renderPass = newSubpass;
+
   m_drawSurface = framebuffer;
+
 }
 
 size_t CubesRenderer::AddCubeToScene(const CubeDescription & description)
@@ -90,35 +89,28 @@ void CubesRenderer::Draw()
   {
     m_cubesBuffer->UploadAsync(m_cubes.data(), m_cubesCount * sizeof(CubeDescription));
     m_invalidGeometry = false;
-    m_invalidScene = true;
-  }
-
-  if (m_invalidScene || m_renderPass->ShouldBeInvalidated())
-  {
-    if (m_renderPass->BeginPass())
-    {
-      auto extent = m_drawSurface->GetExtent();
-      uint32_t width = extent[0], height = extent[1];
-      m_renderPass->SetViewport(static_cast<float>(width), static_cast<float>(height));
-      m_renderPass->SetScissor(0, 0, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-
-      m_renderPass->BindVertexBuffer(0, *m_cubesBuffer);
-      m_renderPass->DrawVertices(static_cast<uint32_t>(m_cubesCount), 1);
-
-      m_renderPass->EndPass();
-      m_invalidScene = false;
-    }
+    InvalidateScene();
   }
 }
 
 void CubesRenderer::InvalidateScene()
 {
-  m_invalidScene = true;
+  auto process = m_context.CreateProcess();
+  {
+    auto extent = m_drawSurface->GetExtent();
+    uint32_t width = extent[0], height = extent[1];
+    process->SetViewport(static_cast<float>(width), static_cast<float>(height));
+    process->SetScissor(0, 0, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+
+    process->BindVertexBuffer(0, m_cubesBuffer);
+    process->DrawVertices(static_cast<uint32_t>(m_cubesCount), 1);
+  }
+  m_drawSurface->SetSubpass(0, m_renderPass, process);
 }
 
 void CubesRenderer::DestroyHandles()
 {
-  //TODO: Destroy buffers, renderPass
+  //TODO: remove m_renderPass
 }
 
 CubesRenderer::UniformBlock::UniformBlock()

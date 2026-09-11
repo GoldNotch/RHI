@@ -9,6 +9,7 @@ stb/cci.20240531
 glm/1.0.1
 glfw/3.4
 catch2/3.12.0
+rectpack2d/cci.20210710
 
 
 [generators]

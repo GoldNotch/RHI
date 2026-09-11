@@ -34,26 +34,6 @@ constexpr VkImageLayout MakeAttachmentFinalLayout(RHI::ImageFormat format)
   }
 }
 
-constexpr VkImageUsageFlagBits CalcImageUsageByFormat(RHI::ImageFormat format)
-{
-  switch (format)
-  {
-    case RHI::ImageFormat::A8:
-    case RHI::ImageFormat::R8:
-    case RHI::ImageFormat::RG8:
-    case RHI::ImageFormat::RGB8:
-    case RHI::ImageFormat::RGBA8:
-    case RHI::ImageFormat::BGR8:
-    case RHI::ImageFormat::BGRA8:
-      return VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    case RHI::ImageFormat::DEPTH:
-    case RHI::ImageFormat::DEPTH_STENCIL:
-      return VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-    default:
-      return VK_IMAGE_USAGE_FLAG_BITS_MAX_ENUM;
-  }
-}
-
 constexpr VkImageAspectFlags CalcImageAspectByFormat(RHI::ImageFormat format)
 {
   switch (format)
@@ -87,9 +67,13 @@ VkAttachmentDescription BuildAttachmentDescription(const RHI::TextureDescription
     attachmentDescription.initialLayout = MakeAttachmentInitialLayout(description.format);
     attachmentDescription.finalLayout = MakeAttachmentFinalLayout(description.format);
     attachmentDescription.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    attachmentDescription.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachmentDescription.storeOp = samplesCount == RHI::SamplesCount::One
+                                    ? VK_ATTACHMENT_STORE_OP_STORE
+                                    : VK_ATTACHMENT_STORE_OP_DONT_CARE;
     attachmentDescription.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    attachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachmentDescription.stencilStoreOp = samplesCount == RHI::SamplesCount::One
+                                           ? VK_ATTACHMENT_STORE_OP_STORE
+                                           : VK_ATTACHMENT_STORE_OP_DONT_CARE;
   }
   return attachmentDescription;
 }
@@ -106,7 +90,7 @@ GenericAttachment::GenericAttachment(Context & ctx, const TextureDescription & a
 {
   m_images.reserve(m_instancesCount);
   m_views.reserve(m_instancesCount);
-  m_layouts.reserve(m_instancesCount);
+  m_synchronizers.reserve(m_instancesCount);
 }
 
 GenericAttachment::~GenericAttachment()
@@ -121,13 +105,9 @@ GenericAttachment::~GenericAttachment()
 //--------------------- IAttachment interface ----------------
 
 
-std::future<DownloadResult> GenericAttachment::DownloadImage(HostImageFormat format,
-                                                             const TextureRegion & region)
+std::shared_ptr<IAwaitable> GenericAttachment::DownloadImage(const DownloadImageArgs & args)
 {
-  DownloadImageArgs args{};
-  args.format = format;
-  args.copyRegion = region;
-  return GetContext().GetTransferer().DownloadImage(*this, args);
+  return GetContext().GetTransferer(QueueType::Graphics).DownloadImage(*this, args);
 }
 
 size_t GenericAttachment::Size() const
@@ -139,7 +119,19 @@ size_t GenericAttachment::Size() const
 void GenericAttachment::BlitTo(ITexture * texture)
 {
   if (auto * ptr = dynamic_cast<IInternalTexture *>(texture))
-    GetContext().GetTransferer().BlitImageToImage(*ptr, *this, RHI::TextureRegion{});
+    GetContext()
+      .GetTransferer(QueueType::Graphics)
+      .BlitImageToImage(*ptr, *this, RHI::TextureRegion{});
+}
+
+void GenericAttachment::SetClearValue(float r, float g, float b, float a)
+{
+  m_clearValue.color = VkClearColorValue{r, g, b, a};
+}
+
+void GenericAttachment::SetClearValue(float depth, uint32_t stencil)
+{
+  m_clearValue.depthStencil = VkClearDepthStencilValue{depth, stencil};
 }
 
 TextureDescription GenericAttachment::GetDescription() const noexcept
@@ -154,14 +146,9 @@ VkImageView GenericAttachment::GetImageView() const noexcept
   return m_views[m_activeImage];
 }
 
-void GenericAttachment::TransferLayout(details::CommandBuffer & commandBuffer, VkImageLayout layout)
-{
-  m_layouts[m_activeImage].TransferLayout(commandBuffer, layout);
-}
-
 VkImageLayout GenericAttachment::GetLayout() const noexcept
 {
-  return m_layouts[m_activeImage].GetLayout();
+  return m_synchronizers[m_activeImage].GetLayout();
 }
 
 VkImage GenericAttachment::GetHandle() const noexcept
@@ -200,9 +187,14 @@ VkImageViewType GenericAttachment::GetImageViewType() const noexcept
   return VK_IMAGE_VIEW_TYPE_2D;
 }
 
+details::Synchronizer & GenericAttachment::GetSynchronizer() & noexcept
+{
+  return m_synchronizers[m_activeImage];
+}
+
 //-------------------- IAttachment interface --------------------
 
-void GenericAttachment::Invalidate()
+void GenericAttachment::Invalidate(VkImageUsageFlags usage)
 {
   if (m_changedSize || m_changedMSAA)
   {
@@ -223,7 +215,7 @@ void GenericAttachment::Invalidate()
     while (m_images.size() > m_instancesCount)
     {
       m_images.pop_back();
-      m_layouts.pop_back();
+      m_synchronizers.pop_back();
       m_views.pop_back();
     }
 
@@ -231,10 +223,8 @@ void GenericAttachment::Invalidate()
     while (m_images.size() < m_instancesCount)
     {
       auto memoryBlock =
-        GetContext().GetBuffersAllocator().AllocImage(m_description,
-                                                      CalcImageUsageByFormat(m_description.format),
-                                                      desiredMSAA);
-      m_layouts.emplace_back(memoryBlock.GetImage());
+        GetContext().GetBuffersAllocator().AllocImage(m_description, usage, desiredMSAA);
+      m_synchronizers.emplace_back(GetContext(), memoryBlock.GetImage());
       m_views.emplace_back(utils::CreateImageView(GetContext().GetGpuConnection().GetDevice(),
                                                   memoryBlock.GetImage(), GetInternalFormat(),
                                                   VK_IMAGE_VIEW_TYPE_2D,
@@ -275,11 +265,6 @@ VkAttachmentDescription GenericAttachment::BuildDescription() const noexcept
 {
   assert(!m_changedMSAA && !m_changedSize && !m_changedImagesCount);
   return BuildAttachmentDescription(m_description, m_samplesCount);
-}
-
-void GenericAttachment::TransferLayout(VkImageLayout layout) noexcept
-{
-  m_layouts[m_activeImage].TransferLayout(layout);
 }
 
 void GenericAttachment::Resize(const VkExtent2D & new_extent) noexcept

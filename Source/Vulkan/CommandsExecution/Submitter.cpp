@@ -43,14 +43,14 @@ Submitter & Submitter::operator=(Submitter && rhs) noexcept
   return *this;
 }
 
-AsyncTask * Submitter::Submit(bool waitPrevSubmitOnGPU, std::vector<VkSemaphore> && waitSemaphores)
+SubmitTask * Submitter::Submit(bool waitPrevSubmitOnGPU, std::span<const VkSemaphore> waitSemaphores)
 {
   const VkSemaphore signalSem = m_newBarrier.GetSemaphore();
   const VkCommandBuffer buffer = GetHandle();
   auto [_, queue] = GetContext().GetGpuConnection().GetQueue(m_queueType);
 
-  if (!m_isFirstSubmit && waitPrevSubmitOnGPU)
-    waitSemaphores.push_back(m_oldBarrier.GetSemaphore());
+  //if (!m_isFirstSubmit && waitPrevSubmitOnGPU)
+  //  waitSemaphores.push_back(m_oldBarrier.GetSemaphore());
 
   assert(std::all_of(waitSemaphores.begin(), waitSemaphores.end(),
                      [](VkSemaphore sem) { return !!sem; }));
@@ -72,7 +72,6 @@ AsyncTask * Submitter::Submit(bool waitPrevSubmitOnGPU, std::vector<VkSemaphore>
     throw std::runtime_error("failed to submit command buffer!");
   std::swap(m_oldBarrier, m_newBarrier);
   m_isFirstSubmit = false;
-  waitSemaphores.clear();
   return &m_oldBarrier;
 }
 

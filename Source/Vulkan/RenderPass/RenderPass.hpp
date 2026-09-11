@@ -1,21 +1,19 @@
 #pragma once
 
-#include <condition_variable>
-#include <list>
-#include <shared_mutex>
-
-#include <CommandsExecution/Submitter.hpp>
+#include <CommandsExecution/CommandBuffer.hpp>
+#include <Memory/ResourceUser.hpp>
 #include <Private/OwnedBy.hpp>
-#include <RenderPass/Subpass.hpp>
 #include <RHI.hpp>
-#include <Utils/RenderPassBuilder.hpp>
-#include <vulkan/vulkan.hpp>
+#include <vulkan/vulkan.h>
 
 namespace RHI::vulkan
 {
 struct Context;
 struct RenderTarget;
 struct Framebuffer;
+struct Pipeline;
+struct PipelineProcess;
+struct SubpassGraph;
 } // namespace RHI::vulkan
 
 namespace RHI::vulkan
@@ -30,40 +28,41 @@ struct RenderPass : public IInvalidable,
   MAKE_ALIAS_FOR_GET_OWNER(Context, GetContext);
   MAKE_ALIAS_FOR_GET_OWNER(Framebuffer, GetFramebuffer);
 
-public: // IFramebuffer Interface
-  ISubpass * CreateSubpass();
-  void DeleteSubpass(ISubpass * subpass);
+public:
+  void SetSubpass(uint32_t index, PipelinePtr pipeline, PipelineProcessPtr process);
+  void ClearSubpasses();
 
-  AsyncTask * Draw(RenderTarget & renderTarget,
-                   std::vector<VkSemaphore> && imageAvailiableSemaphore);
-  void SetAttachments(const std::vector<VkAttachmentDescription> & attachments) noexcept;
-  const VkAttachmentDescription & GetAttachmentDescription(uint32_t idx) const & noexcept;
-  void ForEachSubpass(std::function<void(Subpass &)> && func);
+  void SetAttachments(uint32_t buffersCount,
+                      std::span<const VkAttachmentDescription> attachments) noexcept;
 
 public: // IInvalidable Interface
   virtual void Invalidate() override;
   virtual void SetInvalid() override;
 
-public:
+public: // internal public API
   VkRenderPass GetHandle() const noexcept { return m_renderPass; }
-  void WaitForRenderPassIsValid() const noexcept;
-  void UpdateRenderPassValidFlag() noexcept;
-  void WaitForRenderingIsDone() noexcept;
+  const RenderTarget * GetActiveRenderTarget() const noexcept { return m_activeRenderTarget; }
+
+  void RecordCommands(details::CommandBuffer & commands, RenderTarget & renderTarget);
+  void CollectAttachmentsUsageInfo(std::span<VkImageUsageFlags> usage) const;
+
+public: // IResourceUser
+  void CollectResources(std::vector<ResourcePtr> & resources) const;
 
 private:
-  std::vector<VkAttachmentDescription> m_cachedAttachments;
-
+  const RenderTarget * m_activeRenderTarget = nullptr;
+  std::unique_ptr<SubpassGraph> m_subpassGraph = nullptr;
   /// There is a lot of thread-readers, so it's must be synchronized access
   VkRenderPass m_renderPass = VK_NULL_HANDLE;
   bool m_invalidRenderPass = false;
-  utils::RenderPassBuilder m_builder;
+  details::CommandBuffer m_writeBuffer;
+  details::CommandBuffer m_execBuffer;
 
-  /// Flag to notify that subpasses can begin pass
-  std::atomic_bool m_isReadyForRendering = false;
+  using Subpass = std::pair<std::shared_ptr<Pipeline>, std::shared_ptr<PipelineProcess>>;
+  std::vector<Subpass> m_subpasses;
+  bool m_dirtyCommands = false;
 
-  details::Submitter m_submitter;
-  std::list<Subpass> m_subpasses;
-  uint32_t m_createSubpassCallsCounter = 0;
+  std::unique_ptr<Pipeline> m_dummyPipeline; ///< fummy pipeline is used when no subpasses was added
 };
 
 

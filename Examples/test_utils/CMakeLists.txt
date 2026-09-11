@@ -19,6 +19,7 @@ target_include_directories(${this_target} PUBLIC "./")
 find_package(glm CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(stb CONFIG REQUIRED)
+find_package(rectpack2d CONFIG REQUIRED)
 
 target_link_libraries(${this_target} 
 PRIVATE
@@ -26,6 +27,7 @@ PRIVATE
 	stb::stb
 	glfw
 	RHI
+	rectpack2d::rectpack2d
 )
 
 target_include_directories(${this_target}

@@ -72,12 +72,14 @@ enum class ImageFormat : uint8_t
 /// @brief
 enum ShaderAttachmentSlot : uint8_t
 {
-  Color,            ///< color attachment
-  DepthStencil,     ///< depth-stencil attachment
-  Input,            ///< read-only shader attachment
-  Preserved = 0x80, ///< flag, that image just stored and unused in shader
-  TOTAL
+  Undefined = 0,                         ///< no attachment used in subpass
+  Color = utils::bit<uint8_t>(1),        ///< color attachment
+  DepthStencil = utils::bit<uint8_t>(2), ///< depth-stencil attachment
+  Input = utils::bit<uint8_t>(4),        ///< read-only shader attachment
+  Preserved = 0x80,                      ///< flag, that image just stored and unused in shader
+  TOTAL = 4
 };
+DECLARE_BIT_OPERATIONS_FOR_ENUM(ShaderAttachmentSlot)
 
 using texel_t = uint16_t;
 /// For Image1D used only 0'th index
@@ -128,8 +130,8 @@ struct UploadImageArgs final
 
 struct DownloadImageArgs final
 {
-  HostImageFormat format; ///< desired format
-  TextureRegion copyRegion{};
+  HostTextureView dstTexture; ///< destination texture
+  TextureRegion copyRegion{}; ///< where from copy texels
 };
 
 } // namespace RHI

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <CommandsExecution/AsyncTask.hpp>
+#include <CommandsExecution/SubmitTask.hpp>
 #include <CommandsExecution/CommandBuffer.hpp>
 #include <Device.hpp>
 #include <RHI.hpp>
@@ -16,15 +16,15 @@ struct Submitter : public CommandBuffer
   Submitter(Submitter && rhs) noexcept;
   Submitter & operator=(Submitter && rhs) noexcept;
 
-  AsyncTask * Submit(bool waitPrevSubmitOnGPU, std::vector<VkSemaphore> && waitSemaphores);
-  void WaitForSubmitCompleted();
+  virtual SubmitTask * Submit(bool waitPrevSubmitOnGPU, std::span<const VkSemaphore> waitSemaphores);
+  virtual void WaitForSubmitCompleted();
 
 protected:
   VkPipelineStageFlags m_waitStages;
   QueueType m_queueType;
 
-  AsyncTask m_oldBarrier;
-  AsyncTask m_newBarrier;
+  SubmitTask m_oldBarrier;
+  SubmitTask m_newBarrier;
   bool m_isFirstSubmit = true;
 };
 

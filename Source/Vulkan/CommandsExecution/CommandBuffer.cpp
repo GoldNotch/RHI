@@ -40,6 +40,7 @@ namespace RHI::vulkan::details
 CommandBuffer::CommandBuffer(Context & ctx, uint32_t queue_family, VkCommandBufferLevel level)
   : OwnedBy<Context>(ctx)
   , m_level(level)
+  , m_queueFamily(queue_family)
   , m_pool(::CreateCommandPool(ctx.GetGpuConnection().GetDevice(), queue_family))
   , m_buffer(::CreateCommandBuffer(ctx.GetGpuConnection().GetDevice(), m_pool, level))
 {
@@ -68,6 +69,7 @@ CommandBuffer::CommandBuffer(CommandBuffer && rhs) noexcept
   std::swap(rhs.m_buffer, m_buffer);
   std::swap(rhs.m_commandsCount, m_commandsCount);
   std::swap(rhs.m_level, m_level);
+  std::swap(rhs.m_queueFamily, m_queueFamily);
 }
 
 CommandBuffer & CommandBuffer::operator=(CommandBuffer && rhs) noexcept
@@ -79,18 +81,23 @@ CommandBuffer & CommandBuffer::operator=(CommandBuffer && rhs) noexcept
     std::swap(rhs.m_buffer, m_buffer);
     std::swap(rhs.m_commandsCount, m_commandsCount);
     std::swap(rhs.m_level, m_level);
+    std::swap(rhs.m_queueFamily, m_queueFamily);
   }
   return *this;
 }
 
 void CommandBuffer::BeginWriting() const
 {
-  if (m_level != VK_COMMAND_BUFFER_LEVEL_PRIMARY)
-    throw std::invalid_argument("Called writing in primary CommandBuffer, but buffer is secondary");
+  VkCommandBufferInheritanceInfo inheritanceInfo{};
+  inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+  uint32_t flags = 0;
+  if (m_level == VK_COMMAND_BUFFER_LEVEL_SECONDARY)
+    flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
   VkCommandBufferBeginInfo beginInfo{};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  beginInfo.flags = 0; // Optional
-  beginInfo.pInheritanceInfo = nullptr;
+  beginInfo.flags = flags;
+  beginInfo.pInheritanceInfo = &inheritanceInfo;
   if (vkBeginCommandBuffer(m_buffer, &beginInfo) != VK_SUCCESS)
     throw std::runtime_error("failed to begin recording command buffer!");
 }
@@ -133,10 +140,20 @@ void CommandBuffer::Reset()
   m_commandsCount = 0;
 }
 
-void CommandBuffer::AddCommands(const std::vector<VkCommandBuffer> & buffers)
+void CommandBuffer::AddCommands(std::span<const VkCommandBuffer> buffers)
 {
   assert(m_level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
   vkCmdExecuteCommands(m_buffer, static_cast<uint32_t>(buffers.size()), buffers.data());
+}
+
+void CommandBuffer::AddCommands(VkCommandBuffer buffer)
+{
+  AddCommands(std::span<const VkCommandBuffer>(&buffer, 1));
+}
+
+uint32_t CommandBuffer::GetBoundQueueFamily() const noexcept
+{
+  return m_queueFamily;
 }
 
 } // namespace RHI::vulkan::details

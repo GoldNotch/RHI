@@ -31,13 +31,9 @@ SurfacedAttachment::~SurfacedAttachment()
   DestroySwapchain();
 }
 
-std::future<DownloadResult> SurfacedAttachment::DownloadImage(HostImageFormat format,
-                                                              const TextureRegion & region)
+std::shared_ptr<IAwaitable> SurfacedAttachment::DownloadImage(const DownloadImageArgs & args)
 {
-  DownloadImageArgs args{};
-  args.format = format;
-  args.copyRegion = region;
-  return GetContext().GetTransferer().DownloadImage(*this, args);
+  return GetContext().GetTransferer(QueueType::Graphics).DownloadImage(*this, args);
 }
 
 TextureDescription SurfacedAttachment::GetDescription() const noexcept
@@ -59,6 +55,16 @@ size_t SurfacedAttachment::Size() const
   return RHI::utils::GetSizeOfImage(GetInternalExtent(), GetInternalFormat());
 }
 
+void SurfacedAttachment::SetClearValue(float r, float g, float b, float a)
+{
+  m_clearValue.color = VkClearColorValue{r, g, b, a};
+}
+
+void SurfacedAttachment::SetClearValue(float depth, uint32_t stencil)
+{
+  m_clearValue.depthStencil = VkClearDepthStencilValue{depth, stencil};
+}
+
 // -------------------- ITexture interface ---------------------
 
 VkImageView SurfacedAttachment::GetImageView() const noexcept
@@ -66,15 +72,9 @@ VkImageView SurfacedAttachment::GetImageView() const noexcept
   return m_imageViews[m_activeImage];
 }
 
-void SurfacedAttachment::TransferLayout(details::CommandBuffer & commandBuffer,
-                                        VkImageLayout layout)
-{
-  m_layouts[m_activeImage].TransferLayout(commandBuffer, layout);
-}
-
 VkImageLayout SurfacedAttachment::GetLayout() const noexcept
 {
-  return m_layouts[m_activeImage].GetLayout();
+  return m_synchronizers[m_activeImage].GetLayout();
 }
 
 VkImage SurfacedAttachment::GetHandle() const noexcept
@@ -132,7 +132,7 @@ void SurfacedAttachment::BlitTo(ITexture * texture)
 
 // --------------------- IAttachment interface ----------------------
 
-void SurfacedAttachment::Invalidate()
+void SurfacedAttachment::Invalidate(VkImageUsageFlags usage)
 {
   if (m_invalidSwapchain || !m_swapchain->swapchain)
   {
@@ -158,9 +158,9 @@ void SurfacedAttachment::Invalidate()
       m_imageAvailabilitySemaphores.push_back(
         utils::SemaphoreBuilder().Make(GetContext().GetGpuConnection().GetDevice()));
 
-    m_layouts.reserve(m_images.size());
+    m_synchronizers.reserve(m_images.size());
     for (auto image : m_images)
-      m_layouts.emplace_back(image);
+      m_synchronizers.emplace_back(GetContext(), image);
 
     // reset invalid flags
     m_invalidSwapchain = false;
@@ -209,7 +209,7 @@ bool SurfacedAttachment::FinalRendering(VkSemaphore waitSemaphore)
   if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)
   {
     m_renderingMutex.unlock();
-    Invalidate();
+    Invalidate(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
     return false;
   }
   else if (res != VK_SUCCESS)
@@ -248,15 +248,15 @@ VkAttachmentDescription SurfacedAttachment::BuildDescription() const noexcept
   return description;
 }
 
-void SurfacedAttachment::TransferLayout(VkImageLayout newLayout) noexcept
-{
-  m_layouts[m_activeImage].TransferLayout(newLayout);
-}
-
 void SurfacedAttachment::Resize(const VkExtent2D & new_extent) noexcept
 {
   // do nothing because resizing handled in AcquireForRend
   m_invalidSwapchain = true;
+}
+
+details::Synchronizer & SurfacedAttachment::GetSynchronizer() & noexcept
+{
+  return m_synchronizers[m_activeImage];
 }
 
 // ---------------------------- Private -----------------
@@ -273,7 +273,7 @@ void SurfacedAttachment::DestroySwapchain() noexcept
   m_images.clear();
   m_imageViews.clear();
   m_imageAvailabilitySemaphores.clear();
-  m_layouts.clear();
+  m_synchronizers.clear();
 }
 
 } // namespace RHI::vulkan
